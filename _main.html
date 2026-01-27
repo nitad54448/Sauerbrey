@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QCM Analysis - Sauerbrey & Z-Match</title>
+    <title>QCM Analyst</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
@@ -14,28 +16,25 @@
             --bg-dark: #0f172a;
             --panel-dark: #1e293b;
             --accent: #3b82f6;
+            --accent-hover: #2563eb;
             --text-light: #f8fafc;
-            --text-dark: #334155;
-            --text-muted-light: #94a3b8;
-            --text-muted-dark: #64748b;
+            --text-muted: #94a3b8;
             --border-dark: #334155;
-            --border-light: #e2e8f0;
-            --bg-light-stage: #f1f5f9;
-            --bg-light-card: #ffffff;
+            --bg-stage: #f1f5f9;
+            --bg-card: #ffffff;
         }
 
         body {
             margin: 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg-dark); /* Fallback */
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-dark);
             height: 100vh;
             display: grid;
-            /* CHANGE 1: Left panel is now 30% width */
-            grid-template-columns: 30% 1fr;
+            grid-template-columns: 30% 1fr; 
             overflow: hidden;
         }
 
-        /* --- LEFT PANEL (DARK) --- */
+        /* --- SIDEBAR --- */
         .sidebar {
             background-color: var(--panel-dark);
             border-right: 1px solid var(--border-dark);
@@ -44,17 +43,25 @@
             padding: 20px;
             overflow-y: auto;
             color: var(--text-light);
-            box-shadow: 4px 0 10px rgba(0,0,0,0.3);
-            z-index: 10;
+            z-index: 20;
+            min-width: 350px;
         }
 
-        .header { margin-bottom: 20px; }
-        h2 { font-size: 1.2rem; margin: 0 0 10px 0; font-weight: 600; }
-        h3 { font-size: 0.85rem; text-transform: uppercase; color: var(--accent); margin: 20px 0 10px 0; letter-spacing: 1px; }
+        .header h2 { font-size: 1.4rem; margin: 0; font-weight: 600; }
+        .header div { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px; }
 
-        /* Inputs */
-        .control-group { margin-bottom: 12px; }
-        label { display: block; font-size: 0.8rem; color: var(--text-muted-light); margin-bottom: 4px; }
+        h3 { 
+            font-size: 0.75rem; 
+            text-transform: uppercase; 
+            color: var(--accent); 
+            margin: 15px 0 8px 0; 
+            letter-spacing: 1px; 
+            font-weight: 700;
+        }
+
+        .control-group { margin-bottom: 0; }
+        label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+        
         select, input[type="number"], input[type="text"] {
             width: 100%;
             background: #0f172a;
@@ -64,8 +71,25 @@
             border-radius: 4px;
             font-size: 0.9rem;
             box-sizing: border-box;
+            height: 38px;
         }
         select:focus, input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+        /* GRID SYSTEM */
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 12px;
+        }
+
+        .sim-result-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+            align-items: stretch;
+        }
 
         .file-upload-btn {
             background: #334155;
@@ -76,86 +100,120 @@
             cursor: pointer;
             border: 1px dashed #64748b;
             transition: all 0.2s;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+            display: block;
         }
         .file-upload-btn:hover { background: #475569; border-color: var(--accent); }
         input[type="file"] { display: none; }
 
-        /* Results Box */
-        .results-panel {
+        /* PANELS */
+        .sim-panel {
+            background: rgba(59, 130, 246, 0.05);
+            border: 1px solid var(--border-dark);
+            padding: 10px;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .checkbox-wrapper { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-light); font-weight: 500; font-size: 0.85rem; margin-bottom: 8px;}
+        input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
+        .thickness-card {
             background: rgba(59, 130, 246, 0.1);
             border: 1px solid var(--accent);
             border-radius: 6px;
-            padding: 15px;
-            margin-top: 20px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
         }
-        .result-item { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.9rem; }
-        .result-val { font-weight: bold; font-family: monospace; }
-        .method-tag { font-size: 0.7rem; background: var(--accent); padding: 2px 6px; border-radius: 4px; color: white; }
+        .thickness-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;}
+        .thickness-val { font-size: 1.4rem; font-weight: 700; color: var(--accent); font-family: monospace; margin-top: 4px; }
 
-        /* Buttons */
+        .secondary-results {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+        .sec-res-item span:last-child { font-family: monospace; font-weight: bold; color: white; margin-left: 5px; }
+
         .btn-primary {
             background: var(--accent);
             color: white;
             border: none;
-            padding: 10px;
+            padding: 12px;
             border-radius: 4px;
             width: 100%;
             cursor: pointer;
             font-weight: 600;
-            margin-top: 10px;
+            margin-top: auto; 
         }
-        .btn-primary:hover { background: #2563eb; }
+        .btn-primary:hover { background: var(--accent-hover); }
 
-        .btn-secondary {
-            background: transparent;
-            border: 1px solid var(--accent);
-            color: var(--accent);
-            padding: 8px;
-            border-radius: 4px;
-            width: 100%;
-            cursor: pointer;
-            margin-top: 5px;
-        }
-        .btn-secondary:hover { background: rgba(59, 130, 246, 0.1); }
-
-        /* --- RIGHT PANEL (LIGHT) --- */
+        /* --- STAGE --- */
         .main-stage {
-            position: relative;
             display: flex;
             flex-direction: column;
             padding: 20px;
-            /* CHANGE 2: Light Background */
-            background: var(--bg-light-stage); 
-            color: var(--text-dark);
+            background: var(--bg-stage); 
+            color: #334155;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
         }
 
-        .chart-container {
+        .chart-wrapper {
             flex-grow: 1;
-            /* CHANGE 2: White Card for Chart */
-            background: var(--bg-light-card);
+            background: var(--bg-card);
             border-radius: 8px;
-            border: 1px solid var(--border-light);
+            border: 1px solid #e2e8f0;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             position: relative;
             padding: 10px;
+            min-height: 0;
         }
+
+        .chart-controls {
+            position: absolute;
+            top: 20px;
+            left: 20px; 
+            z-index: 10;
+        }
+        .btn-sm {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #cbd5e1;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: #475569;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .btn-sm:hover { background: white; color: var(--accent); border-color: var(--accent); }
         
         .empty-state {
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
-            color: var(--text-muted-dark);
-            pointer-events: none;
+            color: #64748b;
         }
 
-        .instructions {
+        .info-bar {
             margin-top: 10px;
-            font-size: 0.8rem;
-            color: var(--text-muted-dark);
+            font-size: 0.85rem;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
         }
-
     </style>
 </head>
 <body>
@@ -163,75 +221,87 @@
     <div class="sidebar">
         <div class="header">
             <h2>QCM Analyst</h2>
-            <div style="font-size: 0.8rem; color: var(--text-muted-light)">Sauerbrey & Z-Match</div>
+            <div>Data & Overlay</div>
         </div>
 
         <label for="fileInput" class="file-upload-btn" id="fileBtn">
-            Select Data File (.txt/.csv)
+            📂 Load Data File (.dat/.txt)
         </label>
-        <input type="file" id="fileInput" accept=".csv, .txt">
+        <input type="file" id="fileInput" accept=".dat, .txt, .csv">
 
-        <h3>Crystal Parameters</h3>
-        <div class="control-group">
-            <label>Crystal Frequency (MHz)</label>
-            <select id="crystalFreq" onchange="updateCalculations()">
-                <option value="5000000">5 MHz</option>
-                <option value="6000000" selected>6 MHz</option>
-                <option value="10000000">10 MHz</option>
-            </select>
-        </div>
-        <div class="control-group">
-            <label>Active Diameter (mm)</label>
-            <select id="crystalDiam" onchange="updateCalculations()">
-                <option value="10">10 mm</option>
-                <option value="14" selected>14 mm</option>
-            </select>
+        <h3>Parameters</h3>
+        
+        <div class="input-row">
+            <div class="control-group">
+                <label>Crystal Freq (MHz)</label>
+                <input type="number" id="crystalFreqInput" value="5" step="0.1" oninput="triggerUpdate()">
+            </div>
+            <div class="control-group">
+                <label>Active Diameter (mm)</label>
+                <input type="number" id="crystalDiam" value="10" step="0.1" oninput="triggerUpdate()">
+            </div>
         </div>
 
-        <h3>Material</h3>
-        <div class="control-group">
-            <label>Material</label>
+        <div class="control-group" style="margin-bottom: 12px;">
+            <label>Material Preset</label>
             <select id="materialSelect" onchange="handleMaterialChange()">
-                <option value="custom">Select Material...</option>
+                <option value="custom">User Defined</option>
                 <option value="Au">Gold (Au)</option>
                 <option value="Ag">Silver (Ag)</option>
                 <option value="Cr">Chromium (Cr)</option>
-                <option value="Ti">Titanium (Ti)</option>
+                <option value="Ti" selected>Titanium (Ti)</option>
                 <option value="Pt">Platinum (Pt)</option>
                 <option value="Cu">Copper (Cu)</option>
                 <option value="Al">Aluminum (Al)</option>
+                <option value="SiO2">Silica (SiO2)</option>
             </select>
         </div>
-        <div class="control-group">
-            <label>Density (g/cm³)</label>
-            <input type="number" id="density" value="19.3" step="0.01" onchange="updateCalculations()">
-        </div>
-        <div class="control-group">
-            <label>Z-Factor (Acoustic Impedance Ratio)</label>
-            <input type="number" id="zFactor" value="0.381" step="0.001" onchange="updateCalculations()">
+
+        <div class="input-row">
+            <div class="control-group">
+                <label>Density ($\rho$)</label>
+                <input type="number" id="density" value="4.50" step="0.01" oninput="triggerUpdate()">
+            </div>
+            <div class="control-group">
+                <label>Z-Factor</label>
+                <input type="number" id="zFactor" value="0.628" step="0.001" oninput="triggerUpdate()">
+            </div>
         </div>
 
-        <h3>Simulation</h3>
-        <div class="control-group">
-            <label>Target ΔF (Hz) for Sim</label>
-            <input type="number" id="simDeltaF" value="5000">
-        </div>
-        <button class="btn-secondary" onclick="runSimulation()">Run Simulation</button>
+        <h3>Simulation & Results</h3>
 
-        <h3>Results</h3>
-        <div class="results-panel">
-            <div class="result-item"><span>Status:</span> <span id="methodUsed" class="method-tag">Waiting</span></div>
-            <div class="result-item"><span>Δ Frequency:</span> <span id="resDeltaF" class="result-val">0 Hz</span></div>
-            <div class="result-item"><span>Mass Change:</span> <span id="resMass" class="result-val">0 μg</span></div>
-            <hr style="border-color: var(--accent); opacity: 0.3;">
-            <div class="result-item" style="font-size: 1.1rem; color: var(--accent);"><span>Thickness:</span> <span id="resThickness" class="result-val">0 nm</span></div>
+        <div class="sim-result-row">
+            <div class="sim-panel">
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" id="simPlotToggle" onchange="triggerUpdate()">
+                    Plot Sim
+                </label>
+                <div style="margin-top: auto;">
+                    <label style="font-size: 0.75rem;">Target $\Delta F$ (Hz)</label>
+                    <input type="number" id="simDeltaFInput" value="0" step="10" oninput="triggerUpdate()">
+                </div>
+            </div>
+
+            <div class="thickness-card">
+                <div class="thickness-label">Thickness</div>
+                <div id="resThickness" class="thickness-val">0 nm</div>
+                <div id="methodUsed" style="font-size:0.7rem; color:#94a3b8; margin-top:4px;">Sauerbrey</div>
+            </div>
         </div>
 
-        <button class="btn-primary" onclick="generatePDF()">Download PDF Report</button>
+        <div class="secondary-results">
+            <div class="sec-res-item">ΔF: <span id="resDeltaF">0 Hz</span></div>
+            <div class="sec-res-item">Mass: <span id="resMass">0 ug</span></div>
+        </div>
+
+        <button class="btn-primary" onclick="generatePDF()">Download Report</button>
     </div>
 
     <div class="main-stage">
-        <div class="chart-container">
+        <div class="chart-wrapper">
+            <div class="chart-controls">
+                <button class="btn-sm" onclick="resetChartZoom()">Reset View</button>
+            </div>
             <canvas id="qcmChart"></canvas>
             <div id="emptyState" class="empty-state">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -239,17 +309,20 @@
                     <path d="M17 8l-5-5-5 5"></path>
                     <path d="M12 3v12"></path>
                 </svg>
-                <h3>Awaiting Data</h3>
-                <p>Load a file or run a simulation to begin.</p>
+                <h3>Ready</h3>
+                <p>Load .dat file or toggle Simulation.</p>
             </div>
         </div>
-        <div class="instructions">
-            <strong>Instructions:</strong> Drag the <span style="color:#3b82f6; font-weight:bold;">BLUE</span> line to the start (baseline) and the <span style="color:#ef4444; font-weight:bold;">RED</span> line to the end (deposition).
+        <div class="info-bar">
+            <span><strong>Controls:</strong> Drag to Pan • Scroll to Zoom • Move Cursors to fit Simulation.</span>
+            <span id="cursorVals">Range: 0s - 0s</span>
         </div>
     </div>
 
 <script>
-    // --- CONSTANTS & DB ---
+    const RHO_Q = 2.648;     
+    const MU_Q = 2.947e11;   
+
     const MATERIALS = {
         'Au': { rho: 19.30, z: 0.381 },
         'Ag': { rho: 10.50, z: 0.529 },
@@ -257,318 +330,367 @@
         'Ti': { rho: 4.50,  z: 0.628 },
         'Pt': { rho: 21.45, z: 0.245 },
         'Cu': { rho: 8.96,  z: 0.437 },
-        'Al': { rho: 2.70,  z: 1.080 }
+        'Al': { rho: 2.70,  z: 1.080 },
+        'SiO2': { rho: 2.20, z: 1.000 }
     };
 
-    // Quartz Physical Constants
-    const RHO_Q = 2.648; // g/cm^3
-    const MU_Q = 2.947e11; // g/cm s^2
-    const Z_Q = 882600; 
-
-    // --- STATE ---
     let chartInstance = null;
-    let rawData = [];
-    let cursorStart = 10;
-    let cursorEnd = 40;
+    let mainDataset = []; 
+    let simDataset = [];  
+    let cursorStart = 0;
+    let cursorEnd = 0;
     let isDragging = null;
+    let currentFileName = "Analysis";
 
-    // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
         initChart();
-        handleMaterialChange();
+        handleMaterialChange(); 
     });
 
-    // --- MATERIAL HANDLER ---
-    function handleMaterialChange() {
-        const mat = document.getElementById('materialSelect').value;
-        if (MATERIALS[mat]) {
-            document.getElementById('density').value = MATERIALS[mat].rho;
-            document.getElementById('zFactor').value = MATERIALS[mat].z;
-            updateCalculations();
-        }
+    // Central function: ensures BOTH the sim curve and text results are refreshed
+    function triggerUpdate() {
+        updateSimulation();
+        updateCalculations();
     }
 
-    // --- DATA LOADING ---
+    function updateSimulation() {
+        const shouldPlot = document.getElementById('simPlotToggle').checked;
+        const deltaF = parseFloat(document.getElementById('simDeltaFInput').value) || 0;
+        
+        simDataset = [];
+
+        if (shouldPlot) {
+            let tStart = 0, tEnd = 100;
+            // Always get current Frequency input
+            let fStart = parseFloat(document.getElementById('crystalFreqInput').value) * 1e6;
+
+            if (mainDataset.length > 0) {
+                // If data exists, align simulation to the data at cursor positions
+                tStart = cursorStart;
+                tEnd = cursorEnd;
+                // Get exact frequency at start cursor for smooth alignment
+                fStart = getInterpolatedFreq(cursorStart);
+            } else {
+                if(cursorEnd > 0) {
+                    tStart = cursorStart;
+                    tEnd = cursorEnd;
+                }
+            }
+
+            const points = 100; 
+            const step = (tEnd - tStart) / points;
+            const centerT = tStart + (tEnd - tStart) / 2;
+            const range = tEnd - tStart;
+            // Adjust sigmoid steepness based on time range width
+            const k = range > 0 ? (10 / range) : 0.5;
+
+            for (let i = 0; i <= points; i++) {
+                const t = tStart + (i * step);
+                const sigmoid = 1 / (1 + Math.exp(-k * (t - centerT)));
+                const y = fStart - (deltaF * sigmoid);
+                simDataset.push({ x: t, y: y });
+            }
+        }
+        refreshChart();
+    }
+
+    function handleMaterialChange() {
+        const mat = document.getElementById('materialSelect').value;
+        const rhoInput = document.getElementById('density');
+        const zInput = document.getElementById('zFactor');
+
+        if (mat !== 'custom' && MATERIALS[mat]) {
+            rhoInput.value = MATERIALS[mat].rho;
+            zInput.value = MATERIALS[mat].z;
+        }
+        // Force calculation update immediately after value change
+        triggerUpdate();
+    }
+
     document.getElementById('fileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
-
-        document.getElementById('fileBtn').innerText = file.name;
-        
+        currentFileName = file.name;
         const reader = new FileReader();
-        reader.onload = function(event) {
-            parseData(event.target.result);
-        };
+        reader.onload = (event) => parseFileContent(event.target.result);
         reader.readAsText(file);
     });
 
-    function parseData(text) {
+    function parseFileContent(text) {
         const lines = text.split('\n');
-        rawData = [];
-        
-        for (let line of lines) {
+        const newData = [];
+        lines.forEach(line => {
             line = line.trim();
-            if (!line || isNaN(line[0]) && line[0] !== '-') continue;
+            if(!line) return;
             const parts = line.split(/[\s,]+/).filter(p => p !== "");
             if (parts.length >= 2) {
                 const t = parseFloat(parts[0]);
                 const f = parseFloat(parts[1]);
-                if (!isNaN(t) && !isNaN(f)) {
-                    rawData.push({ x: t, y: f });
+                // Filter noise
+                if (!isNaN(t) && !isNaN(f) && f > 100000) {
+                    newData.push({ x: t, y: f });
                 }
             }
-        }
+        });
 
-        if (rawData.length > 0) {
-            updateChartData(rawData);
-            const minT = rawData[0].x;
-            const maxT = rawData[rawData.length-1].x;
-            cursorStart = minT + (maxT - minT)*0.1;
-            cursorEnd = minT + (maxT - minT)*0.9;
-            updateChartCursors();
+        if (newData.length > 0) {
+            loadData(newData);
+        } else {
+            alert("No valid frequency data found (>100kHz).");
         }
     }
 
-    // --- SIMULATION ---
-    function runSimulation() {
-        const deltaF = parseFloat(document.getElementById('simDeltaF').value) || 5000;
-        const baseF = parseFloat(document.getElementById('crystalFreq').value);
-        
-        rawData = [];
-        for (let t = 0; t <= 60; t+=0.5) {
-            let f = baseF;
-            if (t > 15 && t < 45) {
-                const progress = (t - 15) / 30;
-                const ease = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-                f = baseF - (deltaF * ease);
-            } else if (t >= 45) {
-                f = baseF - deltaF;
-            }
-            f += (Math.random() - 0.5) * (deltaF * 0.005);
-            rawData.push({ x: t, y: f });
+    function loadData(data) {
+        mainDataset = data;
+        if (mainDataset.length > 1) {
+            const tMin = mainDataset[0].x;
+            const tMax = mainDataset[mainDataset.length - 1].x;
+            cursorStart = tMin + (tMax - tMin) * 0.1;
+            cursorEnd = tMax - (tMax - tMin) * 0.1;
         }
-
-        cursorStart = 10;
-        cursorEnd = 50;
-        updateChartData(rawData);
+        triggerUpdate();
+        updateChartCursors();
     }
 
-    // --- CHARTING (Chart.js) ---
+    function refreshChart() {
+        chartInstance.data.datasets[0].data = mainDataset;
+        chartInstance.data.datasets[1].data = simDataset;
+
+        if (mainDataset.length > 0 || simDataset.length > 0) {
+            document.getElementById('emptyState').style.display = 'none';
+        } else {
+            document.getElementById('emptyState').style.display = 'block';
+        }
+
+        chartInstance.update('none'); 
+        if(chartInstance.scales.x.min === undefined && mainDataset.length > 0) {
+             chartInstance.resetZoom();
+        }
+    }
+
+    function resetChartZoom() {
+        if(chartInstance) chartInstance.resetZoom();
+    }
+
     function initChart() {
         const ctx = document.getElementById('qcmChart').getContext('2d');
-        
-        // Setup Chart with LIGHT theme colors
         chartInstance = new Chart(ctx, {
             type: 'line',
-            data: {
-                datasets: [{
-                    label: 'Frequency (Hz)',
-                    data: [],
-                    borderColor: '#3b82f6',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.1
-                }]
+            data: { 
+                datasets: [
+                    { 
+                        label: 'Experimental', 
+                        data: [], 
+                        borderColor: '#3b82f6', 
+                        borderWidth: 1.5, 
+                        pointRadius: 0, 
+                        tension: 0.1,
+                        order: 2 
+                    },
+                    { 
+                        label: 'Simulation', 
+                        data: [], 
+                        borderColor: '#f97316', 
+                        borderWidth: 2, 
+                        pointRadius: 0, 
+                        tension: 0.4, 
+                        borderDash: [5, 5], 
+                        order: 1 
+                    }
+                ] 
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: false,
+                interaction: { mode: 'nearest', intersect: false },
                 scales: {
-                    x: { 
-                        type: 'linear', 
-                        title: { display: true, text: 'Time (s)', color: '#64748b' },
-                        grid: { color: '#e2e8f0' },
-                        ticks: { color: '#64748b' }
-                    },
-                    y: { 
-                        title: { display: true, text: 'Frequency (Hz)', color: '#64748b' },
-                        grid: { color: '#e2e8f0' },
-                        ticks: { color: '#64748b' }
-                    }
+                    x: { type: 'linear', title: { display: true, text: 'Time (s)' }, grid: { display: false } },
+                    y: { beginAtZero: false, title: { display: true, text: 'Frequency (Hz)' } }
                 },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 12 } },
+                    zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, mode: 'xy' } },
                     annotation: {
                         annotations: {
-                            lineStart: {
-                                type: 'line',
-                                xMin: cursorStart,
-                                xMax: cursorStart,
-                                borderColor: 'rgba(59, 130, 246, 0.8)', // Blue
-                                borderWidth: 3,
-                                label: { display: true, content: 'Base', position: 'start', backgroundColor: '#3b82f6' }
-                            },
-                            lineEnd: {
-                                type: 'line',
-                                xMin: cursorEnd,
-                                xMax: cursorEnd,
-                                borderColor: 'rgba(239, 68, 68, 0.8)', // Red
-                                borderWidth: 3,
-                                label: { display: true, content: 'End', position: 'start', backgroundColor: '#ef4444' }
-                            }
+                            lineStart: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'Base' } },
+                            lineEnd: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'End', position: 'end' } }
                         }
                     }
                 }
             }
         });
+        setupDragInteractions();
+    }
 
-        // Drag Logic
+    function setupDragInteractions() {
         const canvas = document.getElementById('qcmChart');
         
         canvas.addEventListener('mousedown', (e) => {
-            if(!chartInstance || rawData.length === 0) return;
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const xValue = chartInstance.scales.x.getValueForPixel(x);
+            if(mainDataset.length === 0 && simDataset.length === 0) return;
+            const xVal = chartInstance.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left);
             const range = chartInstance.scales.x.max - chartInstance.scales.x.min;
             const threshold = range * 0.05;
-
-            if (Math.abs(xValue - cursorStart) < threshold) {
-                isDragging = 'start';
-            } else if (Math.abs(xValue - cursorEnd) < threshold) {
-                isDragging = 'end';
-            }
+            if (Math.abs(xVal - cursorStart) < threshold) isDragging = 'start';
+            else if (Math.abs(xVal - cursorEnd) < threshold) isDragging = 'end';
         });
 
         window.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            let val = chartInstance.scales.x.getValueForPixel(x);
-            val = Math.max(chartInstance.scales.x.min, Math.min(chartInstance.scales.x.max, val));
+            let val = chartInstance.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left);
+            
+            if (mainDataset.length > 0) {
+                const tMin = mainDataset[0].x;
+                const tMax = mainDataset[mainDataset.length-1].x;
+                val = Math.max(tMin, Math.min(tMax, val));
+            }
 
-            if (isDragging === 'start') cursorStart = val;
-            if (isDragging === 'end') cursorEnd = val;
+            if (isDragging === 'start') {
+                if (val >= cursorEnd) val = cursorEnd - 0.1; 
+                cursorStart = val;
+            } else {
+                if (val <= cursorStart) val = cursorStart + 0.1; 
+                cursorEnd = val;
+            }
 
             updateChartCursors();
+            triggerUpdate(); 
         });
-
-        window.addEventListener('mouseup', () => {
-            if(isDragging) {
-                isDragging = null;
-                updateCalculations();
-            }
-        });
-    }
-
-    function updateChartData(data) {
-        document.getElementById('emptyState').style.display = 'none';
-        chartInstance.data.datasets[0].data = data;
-        chartInstance.update();
-        updateCalculations();
+        window.addEventListener('mouseup', () => isDragging = null);
     }
 
     function updateChartCursors() {
-        if(!chartInstance) return;
-        chartInstance.options.plugins.annotation.annotations.lineStart.xMin = cursorStart;
-        chartInstance.options.plugins.annotation.annotations.lineStart.xMax = cursorStart;
-        chartInstance.options.plugins.annotation.annotations.lineEnd.xMin = cursorEnd;
-        chartInstance.options.plugins.annotation.annotations.lineEnd.xMax = cursorEnd;
-        chartInstance.update('none'); 
+        const pl = chartInstance.options.plugins.annotation.annotations;
+        pl.lineStart.xMin = pl.lineStart.xMax = cursorStart;
+        pl.lineEnd.xMin = pl.lineEnd.xMax = cursorEnd;
+        chartInstance.update('none');
+        document.getElementById('cursorVals').innerText = `Range: ${cursorStart.toFixed(1)}s - ${cursorEnd.toFixed(1)}s`;
     }
 
-    // --- MATH & PHYSICS ---
-    function getFrequencyAt(timeVal) {
-        if (rawData.length === 0) return 0;
-        const nearest = rawData.reduce((prev, curr) => {
-            return (Math.abs(curr.x - timeVal) < Math.abs(prev.x - timeVal) ? curr : prev);
-        });
-        return nearest.y;
+    function getInterpolatedFreq(timeVal) {
+        if (mainDataset.length === 0) return 0;
+        return mainDataset.reduce((prev, curr) => Math.abs(curr.x - timeVal) < Math.abs(prev.x - timeVal) ? curr : prev).y;
     }
 
     function updateCalculations() {
-        if (rawData.length === 0) return;
+        // Only run if we have some form of data (Loaded file OR Simulation active)
+        if (mainDataset.length === 0 && simDataset.length === 0) return;
 
-        const fStart = getFrequencyAt(cursorStart);
-        const fEnd = getFrequencyAt(cursorEnd);
-        const deltaF = fStart - fEnd; 
-        
-        const f0 = parseFloat(document.getElementById('crystalFreq').value);
-        const diam = parseFloat(document.getElementById('crystalDiam').value);
-        const rho_film = parseFloat(document.getElementById('density').value);
-        const z_film_ratio = parseFloat(document.getElementById('zFactor').value); 
-
-        const area = Math.PI * Math.pow((diam/10)/2, 2);
-        const ratio = Math.abs(deltaF / f0);
-        let mass = 0;
-        let thickness = 0; 
-        let method = "Sauerbrey";
-
-        if (ratio > 0.05) {
-            method = "Z-Match";
-            // Z-Match Equation
-            const term1 = Math.sqrt(RHO_Q * MU_Q) / (Math.PI * z_film_ratio * fEnd); 
-            const term2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (f0 - fEnd) / f0 ));
-            const arealMass = term1 * term2; 
-            mass = arealMass * area;
-            thickness = arealMass / rho_film; 
-        } else {
-            // Sauerbrey Equation
-            const C = (2 * Math.pow(f0, 2)) / (area * Math.sqrt(RHO_Q * MU_Q));
-            mass = deltaF / C; 
-            thickness = mass / (area * rho_film); 
+        let fStart = 0, fEnd = 0;
+        if (mainDataset.length > 0) {
+            fStart = getInterpolatedFreq(cursorStart);
+            fEnd = getInterpolatedFreq(cursorEnd);
+        } else if (simDataset.length > 0) {
+             fStart = simDataset[0].y;
+             fEnd = simDataset[simDataset.length-1].y;
         }
 
+        const deltaF = fStart - fEnd;
+        const f0 = parseFloat(document.getElementById('crystalFreqInput').value) * 1e6;
+        const diam = parseFloat(document.getElementById('crystalDiam').value);
+        let rho_film = parseFloat(document.getElementById('density').value);
+        const z_film_ratio = parseFloat(document.getElementById('zFactor').value);
+        
+        // Safety: Avoid division by zero
+        if (rho_film <= 0 || isNaN(rho_film)) rho_film = 1;
+        // Area calculation: converts mm to cm for radius, calculates area in cm^2
+        const area = Math.PI * Math.pow((diam/10)/2, 2);
+        
+        let mass = 0, thickness = 0, method = "Sauerbrey";
+        if(f0 > 0 && area > 0) {
+            if (Math.abs(deltaF / f0) > 0.02) {
+                method = "Z-Match";
+                const term1 = Math.sqrt(RHO_Q * MU_Q) / (Math.PI * fEnd * z_film_ratio);
+                const term2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (f0 - fEnd) / f0 ));
+                const arealMass = term1 * term2; // g/cm^2
+                mass = arealMass * area; // g
+                thickness = arealMass / rho_film; // cm
+            } else {
+                // Sauerbrey: mass in grams, area in cm^2, f0 in Hz, rho_q/Mu_q in CGS
+                const C = (area * Math.sqrt(RHO_Q * MU_Q)) / (2 * Math.pow(f0, 2));
+                mass = deltaF * C; 
+                thickness = mass / (area * rho_film); // cm
+            }
+        }
+        
         document.getElementById('resDeltaF').innerText = deltaF.toFixed(1) + " Hz";
-        document.getElementById('resMass').innerText = (mass * 1e6).toFixed(3) + " μg";
+        document.getElementById('resMass').innerText = (mass * 1e6).toFixed(3) + " ug";
         document.getElementById('resThickness').innerText = (thickness * 1e7).toFixed(2) + " nm";
-
-        const tag = document.getElementById('methodUsed');
-        tag.innerText = method;
-        tag.style.backgroundColor = method === "Z-Match" ? "#ec4899" : "#3b82f6";
+        
+        const methodEl = document.getElementById('methodUsed');
+        methodEl.innerText = method; 
+        methodEl.style.color = method === "Z-Match" ? "#ec4899" : "#3b82f6";
     }
 
-    // --- PDF EXPORT ---
     function generatePDF() {
+        if(mainDataset.length === 0 && simDataset.length === 0) return alert("No data to report.");
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
+        const primaryColor = [59, 130, 246];
 
-        doc.setFontSize(18);
+        doc.setFontSize(20);
+        doc.setTextColor(...primaryColor);
         doc.text("QCM Analysis Report", 14, 20);
         
         doc.setFontSize(10);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+        doc.setTextColor(100);
+        doc.text(`Source: ${window.location.href}`, 14, 28);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 33);
+        doc.text(`File: ${currentFileName}`, 14, 38);
 
-        const params = [
-            `Material: ${document.getElementById('materialSelect').options[document.getElementById('materialSelect').selectedIndex].text}`,
-            `Density: ${document.getElementById('density').value} g/cm3`,
-            `Crystal Freq: ${document.getElementById('crystalFreq').value / 1e6} MHz`,
-            `Crystal Diam: ${document.getElementById('crystalDiam').value} mm`,
-            `Method Used: ${document.getElementById('methodUsed').innerText}`
-        ];
-
-        let y = 40;
+        let y = 50;
         doc.setFontSize(12);
-        doc.text("Parameters:", 14, y);
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'bold');
+        doc.text("Parameters", 14, y);
         y += 7;
+
+        doc.setFont(undefined, 'normal');
         doc.setFontSize(10);
-        params.forEach(p => {
-            doc.text(`- ${p}`, 20, y);
-            y += 6;
-        });
+        
+        // Grab values directly from inputs
+        const freq = document.getElementById('crystalFreqInput').value;
+        const diam = document.getElementById('crystalDiam').value; // Fixed: now reads input value directly
+        const mat = document.getElementById('materialSelect').options[document.getElementById('materialSelect').selectedIndex].text;
+        const rho = document.getElementById('density').value;
+        const z = document.getElementById('zFactor').value;
+
+        doc.text(`• Crystal: ${freq} MHz, ${diam} mm`, 20, y);
+        y += 5;
+        doc.text(`• Material: ${mat} (Density: ${rho} g/cm³, Z-Factor: ${z})`, 20, y);
+        y += 5;
+
+        if(document.getElementById('simPlotToggle').checked) {
+            const simDf = document.getElementById('simDeltaFInput').value;
+            doc.text(`• Simulation Target: ${simDf} Hz`, 20, y);
+            y += 5;
+        }
 
         y += 10;
         doc.setFontSize(12);
-        doc.text("Results:", 14, y);
-        y += 7;
-        doc.setFontSize(10);
-        doc.text(`Delta Frequency: ${document.getElementById('resDeltaF').innerText}`, 20, y);
-        y += 6;
-        doc.text(`Calculated Mass: ${document.getElementById('resMass').innerText}`, 20, y);
-        y += 6;
         doc.setFont(undefined, 'bold');
-        doc.text(`Calculated Thickness: ${document.getElementById('resThickness').innerText}`, 20, y);
+        doc.text("Analysis Results", 14, y);
+        y += 7;
+
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        doc.text(`Method: ${document.getElementById('methodUsed').innerText}`, 20, y);
+        y+=5;
+        doc.text(`Delta Frequency: ${document.getElementById('resDeltaF').innerText}`, 20, y);
+        y+=5;
+        doc.text(`Calculated Mass: ${document.getElementById('resMass').innerText}`, 20, y);
+        y+=5;
+        
+        doc.setTextColor(...primaryColor);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Thickness: ${document.getElementById('resThickness').innerText}`, 20, y);
+        doc.setTextColor(0);
         doc.setFont(undefined, 'normal');
 
-        const canvas = document.getElementById('qcmChart');
-        const chartImg = canvas.toDataURL("image/png");
-        y += 15;
-        doc.addImage(chartImg, 'PNG', 14, y, 180, 100);
-
-        doc.save("qcm-report.pdf");
+        const chartImg = chartInstance.toBase64Image();
+        doc.addImage(chartImg, 'PNG', 14, 100, 180, 100);
+        doc.save(`QCM_Report_${Date.now()}.pdf`);
     }
 </script>
-
 </body>
 </html>
