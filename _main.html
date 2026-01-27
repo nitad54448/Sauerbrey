@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QCM Analysis - Sauerbrey & Z-Match</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-dark: #1e293b;
+            --accent: #3b82f6;
+            --text-light: #f8fafc;
+            --text-dark: #334155;
+            --text-muted-light: #94a3b8;
+            --text-muted-dark: #64748b;
+            --border-dark: #334155;
+            --border-light: #e2e8f0;
+            --bg-light-stage: #f1f5f9;
+            --bg-light-card: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-dark); /* Fallback */
+            height: 100vh;
+            display: grid;
+            /* CHANGE 1: Left panel is now 30% width */
+            grid-template-columns: 30% 1fr;
+            overflow: hidden;
+        }
+
+        /* --- LEFT PANEL (DARK) --- */
+        .sidebar {
+            background-color: var(--panel-dark);
+            border-right: 1px solid var(--border-dark);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+            color: var(--text-light);
+            box-shadow: 4px 0 10px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .header { margin-bottom: 20px; }
+        h2 { font-size: 1.2rem; margin: 0 0 10px 0; font-weight: 600; }
+        h3 { font-size: 0.85rem; text-transform: uppercase; color: var(--accent); margin: 20px 0 10px 0; letter-spacing: 1px; }
+
+        /* Inputs */
+        .control-group { margin-bottom: 12px; }
+        label { display: block; font-size: 0.8rem; color: var(--text-muted-light); margin-bottom: 4px; }
+        select, input[type="number"], input[type="text"] {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border-dark);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+        select:focus, input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+        .file-upload-btn {
+            background: #334155;
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            cursor: pointer;
+            border: 1px dashed #64748b;
+            transition: all 0.2s;
+            margin-bottom: 10px;
+        }
+        .file-upload-btn:hover { background: #475569; border-color: var(--accent); }
+        input[type="file"] { display: none; }
+
+        /* Results Box */
+        .results-panel {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .result-item { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.9rem; }
+        .result-val { font-weight: bold; font-family: monospace; }
+        .method-tag { font-size: 0.7rem; background: var(--accent); padding: 2px 6px; border-radius: 4px; color: white; }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            width: 100%;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        .btn-primary:hover { background: #2563eb; }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 8px;
+            border-radius: 4px;
+            width: 100%;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        .btn-secondary:hover { background: rgba(59, 130, 246, 0.1); }
+
+        /* --- RIGHT PANEL (LIGHT) --- */
+        .main-stage {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            /* CHANGE 2: Light Background */
+            background: var(--bg-light-stage); 
+            color: var(--text-dark);
+        }
+
+        .chart-container {
+            flex-grow: 1;
+            /* CHANGE 2: White Card for Chart */
+            background: var(--bg-light-card);
+            border-radius: 8px;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            position: relative;
+            padding: 10px;
+        }
+        
+        .empty-state {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--text-muted-dark);
+            pointer-events: none;
+        }
+
+        .instructions {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: var(--text-muted-dark);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="header">
+            <h2>QCM Analyst</h2>
+            <div style="font-size: 0.8rem; color: var(--text-muted-light)">Sauerbrey & Z-Match</div>
+        </div>
+
+        <label for="fileInput" class="file-upload-btn" id="fileBtn">
+            Select Data File (.txt/.csv)
+        </label>
+        <input type="file" id="fileInput" accept=".csv, .txt">
+
+        <h3>Crystal Parameters</h3>
+        <div class="control-group">
+            <label>Crystal Frequency (MHz)</label>
+            <select id="crystalFreq" onchange="updateCalculations()">
+                <option value="5000000">5 MHz</option>
+                <option value="6000000" selected>6 MHz</option>
+                <option value="10000000">10 MHz</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Active Diameter (mm)</label>
+            <select id="crystalDiam" onchange="updateCalculations()">
+                <option value="10">10 mm</option>
+                <option value="14" selected>14 mm</option>
+            </select>
+        </div>
+
+        <h3>Material</h3>
+        <div class="control-group">
+            <label>Material</label>
+            <select id="materialSelect" onchange="handleMaterialChange()">
+                <option value="custom">Select Material...</option>
+                <option value="Au">Gold (Au)</option>
+                <option value="Ag">Silver (Ag)</option>
+                <option value="Cr">Chromium (Cr)</option>
+                <option value="Ti">Titanium (Ti)</option>
+                <option value="Pt">Platinum (Pt)</option>
+                <option value="Cu">Copper (Cu)</option>
+                <option value="Al">Aluminum (Al)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Density (g/cm³)</label>
+            <input type="number" id="density" value="19.3" step="0.01" onchange="updateCalculations()">
+        </div>
+        <div class="control-group">
+            <label>Z-Factor (Acoustic Impedance Ratio)</label>
+            <input type="number" id="zFactor" value="0.381" step="0.001" onchange="updateCalculations()">
+        </div>
+
+        <h3>Simulation</h3>
+        <div class="control-group">
+            <label>Target ΔF (Hz) for Sim</label>
+            <input type="number" id="simDeltaF" value="5000">
+        </div>
+        <button class="btn-secondary" onclick="runSimulation()">Run Simulation</button>
+
+        <h3>Results</h3>
+        <div class="results-panel">
+            <div class="result-item"><span>Status:</span> <span id="methodUsed" class="method-tag">Waiting</span></div>
+            <div class="result-item"><span>Δ Frequency:</span> <span id="resDeltaF" class="result-val">0 Hz</span></div>
+            <div class="result-item"><span>Mass Change:</span> <span id="resMass" class="result-val">0 μg</span></div>
+            <hr style="border-color: var(--accent); opacity: 0.3;">
+            <div class="result-item" style="font-size: 1.1rem; color: var(--accent);"><span>Thickness:</span> <span id="resThickness" class="result-val">0 nm</span></div>
+        </div>
+
+        <button class="btn-primary" onclick="generatePDF()">Download PDF Report</button>
+    </div>
+
+    <div class="main-stage">
+        <div class="chart-container">
+            <canvas id="qcmChart"></canvas>
+            <div id="emptyState" class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <path d="M17 8l-5-5-5 5"></path>
+                    <path d="M12 3v12"></path>
+                </svg>
+                <h3>Awaiting Data</h3>
+                <p>Load a file or run a simulation to begin.</p>
+            </div>
+        </div>
+        <div class="instructions">
+            <strong>Instructions:</strong> Drag the <span style="color:#3b82f6; font-weight:bold;">BLUE</span> line to the start (baseline) and the <span style="color:#ef4444; font-weight:bold;">RED</span> line to the end (deposition).
+        </div>
+    </div>
+
+<script>
+    // --- CONSTANTS & DB ---
+    const MATERIALS = {
+        'Au': { rho: 19.30, z: 0.381 },
+        'Ag': { rho: 10.50, z: 0.529 },
+        'Cr': { rho: 7.19,  z: 0.305 },
+        'Ti': { rho: 4.50,  z: 0.628 },
+        'Pt': { rho: 21.45, z: 0.245 },
+        'Cu': { rho: 8.96,  z: 0.437 },
+        'Al': { rho: 2.70,  z: 1.080 }
+    };
+
+    // Quartz Physical Constants
+    const RHO_Q = 2.648; // g/cm^3
+    const MU_Q = 2.947e11; // g/cm s^2
+    const Z_Q = 882600; 
+
+    // --- STATE ---
+    let chartInstance = null;
+    let rawData = [];
+    let cursorStart = 10;
+    let cursorEnd = 40;
+    let isDragging = null;
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        initChart();
+        handleMaterialChange();
+    });
+
+    // --- MATERIAL HANDLER ---
+    function handleMaterialChange() {
+        const mat = document.getElementById('materialSelect').value;
+        if (MATERIALS[mat]) {
+            document.getElementById('density').value = MATERIALS[mat].rho;
+            document.getElementById('zFactor').value = MATERIALS[mat].z;
+            updateCalculations();
+        }
+    }
+
+    // --- DATA LOADING ---
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        document.getElementById('fileBtn').innerText = file.name;
+        
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            parseData(event.target.result);
+        };
+        reader.readAsText(file);
+    });
+
+    function parseData(text) {
+        const lines = text.split('\n');
+        rawData = [];
+        
+        for (let line of lines) {
+            line = line.trim();
+            if (!line || isNaN(line[0]) && line[0] !== '-') continue;
+            const parts = line.split(/[\s,]+/).filter(p => p !== "");
+            if (parts.length >= 2) {
+                const t = parseFloat(parts[0]);
+                const f = parseFloat(parts[1]);
+                if (!isNaN(t) && !isNaN(f)) {
+                    rawData.push({ x: t, y: f });
+                }
+            }
+        }
+
+        if (rawData.length > 0) {
+            updateChartData(rawData);
+            const minT = rawData[0].x;
+            const maxT = rawData[rawData.length-1].x;
+            cursorStart = minT + (maxT - minT)*0.1;
+            cursorEnd = minT + (maxT - minT)*0.9;
+            updateChartCursors();
+        }
+    }
+
+    // --- SIMULATION ---
+    function runSimulation() {
+        const deltaF = parseFloat(document.getElementById('simDeltaF').value) || 5000;
+        const baseF = parseFloat(document.getElementById('crystalFreq').value);
+        
+        rawData = [];
+        for (let t = 0; t <= 60; t+=0.5) {
+            let f = baseF;
+            if (t > 15 && t < 45) {
+                const progress = (t - 15) / 30;
+                const ease = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+                f = baseF - (deltaF * ease);
+            } else if (t >= 45) {
+                f = baseF - deltaF;
+            }
+            f += (Math.random() - 0.5) * (deltaF * 0.005);
+            rawData.push({ x: t, y: f });
+        }
+
+        cursorStart = 10;
+        cursorEnd = 50;
+        updateChartData(rawData);
+    }
+
+    // --- CHARTING (Chart.js) ---
+    function initChart() {
+        const ctx = document.getElementById('qcmChart').getContext('2d');
+        
+        // Setup Chart with LIGHT theme colors
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Frequency (Hz)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { 
+                        type: 'linear', 
+                        title: { display: true, text: 'Time (s)', color: '#64748b' },
+                        grid: { color: '#e2e8f0' },
+                        ticks: { color: '#64748b' }
+                    },
+                    y: { 
+                        title: { display: true, text: 'Frequency (Hz)', color: '#64748b' },
+                        grid: { color: '#e2e8f0' },
+                        ticks: { color: '#64748b' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    annotation: {
+                        annotations: {
+                            lineStart: {
+                                type: 'line',
+                                xMin: cursorStart,
+                                xMax: cursorStart,
+                                borderColor: 'rgba(59, 130, 246, 0.8)', // Blue
+                                borderWidth: 3,
+                                label: { display: true, content: 'Base', position: 'start', backgroundColor: '#3b82f6' }
+                            },
+                            lineEnd: {
+                                type: 'line',
+                                xMin: cursorEnd,
+                                xMax: cursorEnd,
+                                borderColor: 'rgba(239, 68, 68, 0.8)', // Red
+                                borderWidth: 3,
+                                label: { display: true, content: 'End', position: 'start', backgroundColor: '#ef4444' }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Drag Logic
+        const canvas = document.getElementById('qcmChart');
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if(!chartInstance || rawData.length === 0) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const xValue = chartInstance.scales.x.getValueForPixel(x);
+            const range = chartInstance.scales.x.max - chartInstance.scales.x.min;
+            const threshold = range * 0.05;
+
+            if (Math.abs(xValue - cursorStart) < threshold) {
+                isDragging = 'start';
+            } else if (Math.abs(xValue - cursorEnd) < threshold) {
+                isDragging = 'end';
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            let val = chartInstance.scales.x.getValueForPixel(x);
+            val = Math.max(chartInstance.scales.x.min, Math.min(chartInstance.scales.x.max, val));
+
+            if (isDragging === 'start') cursorStart = val;
+            if (isDragging === 'end') cursorEnd = val;
+
+            updateChartCursors();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if(isDragging) {
+                isDragging = null;
+                updateCalculations();
+            }
+        });
+    }
+
+    function updateChartData(data) {
+        document.getElementById('emptyState').style.display = 'none';
+        chartInstance.data.datasets[0].data = data;
+        chartInstance.update();
+        updateCalculations();
+    }
+
+    function updateChartCursors() {
+        if(!chartInstance) return;
+        chartInstance.options.plugins.annotation.annotations.lineStart.xMin = cursorStart;
+        chartInstance.options.plugins.annotation.annotations.lineStart.xMax = cursorStart;
+        chartInstance.options.plugins.annotation.annotations.lineEnd.xMin = cursorEnd;
+        chartInstance.options.plugins.annotation.annotations.lineEnd.xMax = cursorEnd;
+        chartInstance.update('none'); 
+    }
+
+    // --- MATH & PHYSICS ---
+    function getFrequencyAt(timeVal) {
+        if (rawData.length === 0) return 0;
+        const nearest = rawData.reduce((prev, curr) => {
+            return (Math.abs(curr.x - timeVal) < Math.abs(prev.x - timeVal) ? curr : prev);
+        });
+        return nearest.y;
+    }
+
+    function updateCalculations() {
+        if (rawData.length === 0) return;
+
+        const fStart = getFrequencyAt(cursorStart);
+        const fEnd = getFrequencyAt(cursorEnd);
+        const deltaF = fStart - fEnd; 
+        
+        const f0 = parseFloat(document.getElementById('crystalFreq').value);
+        const diam = parseFloat(document.getElementById('crystalDiam').value);
+        const rho_film = parseFloat(document.getElementById('density').value);
+        const z_film_ratio = parseFloat(document.getElementById('zFactor').value); 
+
+        const area = Math.PI * Math.pow((diam/10)/2, 2);
+        const ratio = Math.abs(deltaF / f0);
+        let mass = 0;
+        let thickness = 0; 
+        let method = "Sauerbrey";
+
+        if (ratio > 0.05) {
+            method = "Z-Match";
+            // Z-Match Equation
+            const term1 = Math.sqrt(RHO_Q * MU_Q) / (Math.PI * z_film_ratio * fEnd); 
+            const term2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (f0 - fEnd) / f0 ));
+            const arealMass = term1 * term2; 
+            mass = arealMass * area;
+            thickness = arealMass / rho_film; 
+        } else {
+            // Sauerbrey Equation
+            const C = (2 * Math.pow(f0, 2)) / (area * Math.sqrt(RHO_Q * MU_Q));
+            mass = deltaF / C; 
+            thickness = mass / (area * rho_film); 
+        }
+
+        document.getElementById('resDeltaF').innerText = deltaF.toFixed(1) + " Hz";
+        document.getElementById('resMass').innerText = (mass * 1e6).toFixed(3) + " μg";
+        document.getElementById('resThickness').innerText = (thickness * 1e7).toFixed(2) + " nm";
+
+        const tag = document.getElementById('methodUsed');
+        tag.innerText = method;
+        tag.style.backgroundColor = method === "Z-Match" ? "#ec4899" : "#3b82f6";
+    }
+
+    // --- PDF EXPORT ---
+    function generatePDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        doc.setFontSize(18);
+        doc.text("QCM Analysis Report", 14, 20);
+        
+        doc.setFontSize(10);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+
+        const params = [
+            `Material: ${document.getElementById('materialSelect').options[document.getElementById('materialSelect').selectedIndex].text}`,
+            `Density: ${document.getElementById('density').value} g/cm3`,
+            `Crystal Freq: ${document.getElementById('crystalFreq').value / 1e6} MHz`,
+            `Crystal Diam: ${document.getElementById('crystalDiam').value} mm`,
+            `Method Used: ${document.getElementById('methodUsed').innerText}`
+        ];
+
+        let y = 40;
+        doc.setFontSize(12);
+        doc.text("Parameters:", 14, y);
+        y += 7;
+        doc.setFontSize(10);
+        params.forEach(p => {
+            doc.text(`- ${p}`, 20, y);
+            y += 6;
+        });
+
+        y += 10;
+        doc.setFontSize(12);
+        doc.text("Results:", 14, y);
+        y += 7;
+        doc.setFontSize(10);
+        doc.text(`Delta Frequency: ${document.getElementById('resDeltaF').innerText}`, 20, y);
+        y += 6;
+        doc.text(`Calculated Mass: ${document.getElementById('resMass').innerText}`, 20, y);
+        y += 6;
+        doc.setFont(undefined, 'bold');
+        doc.text(`Calculated Thickness: ${document.getElementById('resThickness').innerText}`, 20, y);
+        doc.setFont(undefined, 'normal');
+
+        const canvas = document.getElementById('qcmChart');
+        const chartImg = canvas.toDataURL("image/png");
+        y += 15;
+        doc.addImage(chartImg, 'PNG', 14, y, 180, 100);
+
+        doc.save("qcm-report.pdf");
+    }
+</script>
+
+</body>
+</html>
