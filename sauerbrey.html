@@ -24,17 +24,37 @@
             --bg-card: #ffffff;
         }
 
-        body {
-            margin: 0;
-            font-family: 'Inter', system-ui, sans-serif;
-            background-color: var(--bg-dark);
-            height: 100vh;
-            display: grid;
-            grid-template-columns: 30% 1fr; 
-            overflow: hidden;
-        }
 
-        /* --- SIDEBAR --- */
+body {
+    margin: 0;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--bg-dark);
+    height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(300px, 30%) 6px 1fr; 
+    overflow: hidden;
+}
+
+/
+.gutter {
+    background-color: var(--border-dark);
+    cursor: col-resize;
+    transition: background-color 0.2s;
+    z-index: 50; 
+}
+.gutter:hover, .gutter.active {
+    background-color: var(--accent);
+}
+
+.chart-controls {
+    position: absolute;
+    top: 15px;
+    right: 15px; /* Moved to right */
+    left: auto;  /* Remove left positioning */
+    z-index: 10;
+}
+
+
         .sidebar {
             background-color: var(--panel-dark);
             border-right: 1px solid var(--border-dark);
@@ -179,6 +199,7 @@
             position: relative;
             padding: 10px;
             min-height: 0;
+            min-width: 0;
         }
 
         .chart-controls {
@@ -297,6 +318,8 @@
         <button class="btn-primary" onclick="generatePDF()">Download Report</button>
     </div>
 
+        <div class="gutter" id="resizeHandle"></div>
+
     <div class="main-stage">
         <div class="chart-wrapper">
             <div class="chart-controls">
@@ -347,7 +370,38 @@
         handleMaterialChange(); 
     });
 
-    // Central function: ensures BOTH the sim curve and text results are refreshed
+
+    
+    const gutter = document.getElementById('resizeHandle');
+    let isResizingSidebar = false;
+
+    gutter.addEventListener('mousedown', (e) => {
+        isResizingSidebar = true;
+        gutter.classList.add('active'); // Highlight the bar
+        document.body.style.cursor = 'col-resize'; // Force cursor globally
+        e.preventDefault(); 
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isResizingSidebar) return;
+        let newWidth = e.clientX;
+        if (newWidth < 300) newWidth = 300;
+        if (newWidth > 600) newWidth = 600;
+
+        document.body.style.gridTemplateColumns = `${newWidth}px 6px 1fr`;
+        if(chartInstance) chartInstance.resize();
+    });
+
+    window.addEventListener('mouseup', () => {
+        if(isResizingSidebar) {
+            isResizingSidebar = false;
+            gutter.classList.remove('active');
+            document.body.style.cursor = 'default';
+        }
+    });
+
+
+
     function triggerUpdate() {
         updateSimulation();
         updateCalculations();
