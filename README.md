@@ -2,7 +2,7 @@
 
 **QCM Analyst** is a lightweight, browser-based tool for visualizing and analyzing Quartz Crystal Microbalance (QCM) data. It allows researchers to load experimental datasets, simulate frequency responses, and calculate thin-film thickness using both Sauerbrey and Z-Match (Lu and Lewis) methods.
 
-## 🚀 Features
+##  Features
 
 * **Data Visualization:** Drag-and-drop support for `.dat`, `.txt`, and `.csv` files.
 * **Interactive Controls:** Plot simulation curves (sigmoid) against experimental data to determine frequency shifts ($\Delta f$).
@@ -14,13 +14,13 @@
 
 ---
 
-## 🛠 Usage
+##  Usage
 
-1.  **Open:** Simply open `index.html` in any modern web browser.
+1.  **Open:** Simply open `.html` in any modern web browser.
 2.  **Load Data:** Click **"Load Data File"** to upload your QCM frequency data (Time vs. Frequency).
-    * *Format:* Two columns separated by tabs, spaces, or commas.
+    * *Format:* Two columns separated by tabs, spaces, or commas; or a proprietary file format that is used in our labs (no interest for external users)
 3.  **Set Parameters:**
-    * **Crystal Freq:** The fundamental frequency of your quartz (e.g., 5 MHz).
+    * **Crystal Freq:** The fundamental frequency of quartz (e.g., 5 MHz).
     * **Active Diameter:** The diameter of the electrode area (usually smaller than the total crystal diameter).
     * **Material:** Select a preset (Au, Ti, SiO2, etc.) or enter custom Density and Z-Factor values.
 4.  **Analyze:**
@@ -30,7 +30,7 @@
 
 ---
 
-## 📚 Technical Reference
+##  Technical Reference
 
 ### 1. Physical Constants of Quartz ($AT$-cut)
 The tool uses the standard physical constants for AT-cut quartz crystals:
@@ -72,7 +72,7 @@ And thickness ($d_f$):
 
 $$d_f = \frac{\Delta m}{A \cdot \rho_f}$$
 
-**Why $Z$ is ignored here:**
+** $Z$ is ignored here:**
 In the Sauerbrey limit (thin rigid films), the acoustic wave acts as if it is still propagating through quartz. The impedance mismatch is negligible because the wave does not travel far enough into the film to experience significant phase shift or reflection errors. Therefore, the Z-Factor is assumed to be 1 ($Z_q = Z_f$).
 
 #### B. The Z-Match Equation (Lu and Lewis)
@@ -91,12 +91,14 @@ Where:
 
 ---
 
-## 💻 Tech Stack
+##  Tools
 
 * **HTML5 / CSS3:** Responsive grid layout.
 * **Chart.js:** Rendering the interactive canvas.
 * **Hammer.js & chartjs-plugin-zoom:** Pan and zoom capabilities.
 * **jsPDF:** Client-side PDF generation.
 
-## 📄 License
+---
+
+## License
 MIT
