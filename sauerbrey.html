@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QCM Analyst</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-dark: #1e293b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --text-light: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-dark: #334155;
+            --bg-stage: #f1f5f9;
+            --bg-card: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-dark);
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 30% 1fr; 
+            overflow: hidden;
+        }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            background-color: var(--panel-dark);
+            border-right: 1px solid var(--border-dark);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+            color: var(--text-light);
+            z-index: 20;
+            min-width: 350px;
+        }
+
+        .header h2 { font-size: 1.4rem; margin: 0; font-weight: 600; }
+        .header div { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px; }
+
+        h3 { 
+            font-size: 0.75rem; 
+            text-transform: uppercase; 
+            color: var(--accent); 
+            margin: 15px 0 8px 0; 
+            letter-spacing: 1px; 
+            font-weight: 700;
+        }
+
+        .control-group { margin-bottom: 0; }
+        label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+        
+        select, input[type="number"], input[type="text"] {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border-dark);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+            height: 38px;
+        }
+        select:focus, input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+        /* GRID SYSTEM */
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 12px;
+        }
+
+        .sim-result-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+            align-items: stretch;
+        }
+
+        .file-upload-btn {
+            background: #334155;
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            cursor: pointer;
+            border: 1px dashed #64748b;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+            display: block;
+        }
+        .file-upload-btn:hover { background: #475569; border-color: var(--accent); }
+        input[type="file"] { display: none; }
+
+        /* PANELS */
+        .sim-panel {
+            background: rgba(59, 130, 246, 0.05);
+            border: 1px solid var(--border-dark);
+            padding: 10px;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .checkbox-wrapper { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-light); font-weight: 500; font-size: 0.85rem; margin-bottom: 8px;}
+        input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
+        .thickness-card {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .thickness-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;}
+        .thickness-val { font-size: 1.4rem; font-weight: 700; color: var(--accent); font-family: monospace; margin-top: 4px; }
+
+        .secondary-results {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+        .sec-res-item span:last-child { font-family: monospace; font-weight: bold; color: white; margin-left: 5px; }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            width: 100%;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: auto; 
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+
+        /* --- STAGE --- */
+        .main-stage {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background: var(--bg-stage); 
+            color: #334155;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .chart-wrapper {
+            flex-grow: 1;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            position: relative;
+            padding: 10px;
+            min-height: 0;
+        }
+
+        .chart-controls {
+            position: absolute;
+            top: 20px;
+            left: 20px; 
+            z-index: 10;
+        }
+        .btn-sm {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #cbd5e1;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: #475569;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .btn-sm:hover { background: white; color: var(--accent); border-color: var(--accent); }
+        
+        .empty-state {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #64748b;
+        }
+
+        .info-bar {
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="header">
+            <h2>QCM Analyst</h2>
+            <div>Data & Overlay</div>
+        </div>
+
+        <label for="fileInput" class="file-upload-btn" id="fileBtn">
+            📂 Load Data File (.dat/.txt)
+        </label>
+        <input type="file" id="fileInput" accept=".dat, .txt, .csv">
+
+        <h3>Parameters</h3>
+        
+        <div class="input-row">
+            <div class="control-group">
+                <label>Crystal Freq (MHz)</label>
+                <input type="number" id="crystalFreqInput" value="5" step="0.1" oninput="triggerUpdate()">
+            </div>
+            <div class="control-group">
+                <label>Active Diameter (mm)</label>
+                <input type="number" id="crystalDiam" value="10" step="0.1" oninput="triggerUpdate()">
+            </div>
+        </div>
+
+        <div class="control-group" style="margin-bottom: 12px;">
+            <label>Material Preset</label>
+            <select id="materialSelect" onchange="handleMaterialChange()">
+                <option value="custom">User Defined</option>
+                <option value="Au">Gold (Au)</option>
+                <option value="Ag">Silver (Ag)</option>
+                <option value="Cr">Chromium (Cr)</option>
+                <option value="Ti" selected>Titanium (Ti)</option>
+                <option value="Pt">Platinum (Pt)</option>
+                <option value="Cu">Copper (Cu)</option>
+                <option value="Al">Aluminum (Al)</option>
+                <option value="SiO2">Silica (SiO2)</option>
+            </select>
+        </div>
+
+        <div class="input-row">
+            <div class="control-group">
+                <label>Density ($\rho$)</label>
+                <input type="number" id="density" value="4.50" step="0.01" oninput="triggerUpdate()">
+            </div>
+            <div class="control-group">
+                <label>Z-Factor</label>
+                <input type="number" id="zFactor" value="0.628" step="0.001" oninput="triggerUpdate()">
+            </div>
+        </div>
+
+        <h3>Simulation & Results</h3>
+
+        <div class="sim-result-row">
+            <div class="sim-panel">
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" id="simPlotToggle" onchange="triggerUpdate()">
+                    Plot Sim
+                </label>
+                <div style="margin-top: auto;">
+                    <label style="font-size: 0.75rem;">Target $\Delta F$ (Hz)</label>
+                    <input type="number" id="simDeltaFInput" value="0" step="10" oninput="triggerUpdate()">
+                </div>
+            </div>
+
+            <div class="thickness-card">
+                <div class="thickness-label">Thickness</div>
+                <div id="resThickness" class="thickness-val">0 nm</div>
+                <div id="methodUsed" style="font-size:0.7rem; color:#94a3b8; margin-top:4px;">Sauerbrey</div>
+            </div>
+        </div>
+
+        <div class="secondary-results">
+            <div class="sec-res-item">ΔF: <span id="resDeltaF">0 Hz</span></div>
+            <div class="sec-res-item">Mass: <span id="resMass">0 ug</span></div>
+        </div>
+
+        <button class="btn-primary" onclick="generatePDF()">Download Report</button>
+    </div>
+
+    <div class="main-stage">
+        <div class="chart-wrapper">
+            <div class="chart-controls">
+                <button class="btn-sm" onclick="resetChartZoom()">Reset View</button>
+            </div>
+            <canvas id="qcmChart"></canvas>
+            <div id="emptyState" class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <path d="M17 8l-5-5-5 5"></path>
+                    <path d="M12 3v12"></path>
+                </svg>
+                <h3>Ready</h3>
+                <p>Load .dat file or toggle Simulation.</p>
+            </div>
+        </div>
+        <div class="info-bar">
+            <span><strong>Controls:</strong> Drag to Pan • Scroll to Zoom • Move Cursors to fit Simulation.</span>
+            <span id="cursorVals">Range: 0s - 0s</span>
+        </div>
+    </div>
+
+<script>
+    const RHO_Q = 2.648;     
+    const MU_Q = 2.947e11;   
+
+    const MATERIALS = {
+        'Au': { rho: 19.30, z: 0.381 },
+        'Ag': { rho: 10.50, z: 0.529 },
+        'Cr': { rho: 7.19,  z: 0.305 },
+        'Ti': { rho: 4.50,  z: 0.628 },
+        'Pt': { rho: 21.45, z: 0.245 },
+        'Cu': { rho: 8.96,  z: 0.437 },
+        'Al': { rho: 2.70,  z: 1.080 },
+        'SiO2': { rho: 2.20, z: 1.000 }
+    };
+
+    let chartInstance = null;
+    let mainDataset = []; 
+    let simDataset = [];  
+    let cursorStart = 0;
+    let cursorEnd = 0;
+    let isDragging = null;
+    let currentFileName = "Analysis";
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initChart();
+        handleMaterialChange(); 
+    });
+
+    // Central function: ensures BOTH the sim curve and text results are refreshed
+    function triggerUpdate() {
+        updateSimulation();
+        updateCalculations();
+    }
+
+    function updateSimulation() {
+        const shouldPlot = document.getElementById('simPlotToggle').checked;
+        const deltaF = parseFloat(document.getElementById('simDeltaFInput').value) || 0;
+        
+        simDataset = [];
+
+        if (shouldPlot) {
+            let tStart = 0, tEnd = 100;
+            // Always get current Frequency input
+            let fStart = parseFloat(document.getElementById('crystalFreqInput').value) * 1e6;
+
+            if (mainDataset.length > 0) {
+                // If data exists, align simulation to the data at cursor positions
+                tStart = cursorStart;
+                tEnd = cursorEnd;
+                // Get exact frequency at start cursor for smooth alignment
+                fStart = getInterpolatedFreq(cursorStart);
+            } else {
+                if(cursorEnd > 0) {
+                    tStart = cursorStart;
+                    tEnd = cursorEnd;
+                }
+            }
+
+            const points = 100; 
+            const step = (tEnd - tStart) / points;
+            const centerT = tStart + (tEnd - tStart) / 2;
+            const range = tEnd - tStart;
+            // Adjust sigmoid steepness based on time range width
+            const k = range > 0 ? (10 / range) : 0.5;
+
+            for (let i = 0; i <= points; i++) {
+                const t = tStart + (i * step);
+                const sigmoid = 1 / (1 + Math.exp(-k * (t - centerT)));
+                const y = fStart - (deltaF * sigmoid);
+                simDataset.push({ x: t, y: y });
+            }
+        }
+        refreshChart();
+    }
+
+    function handleMaterialChange() {
+        const mat = document.getElementById('materialSelect').value;
+        const rhoInput = document.getElementById('density');
+        const zInput = document.getElementById('zFactor');
+
+        if (mat !== 'custom' && MATERIALS[mat]) {
+            rhoInput.value = MATERIALS[mat].rho;
+            zInput.value = MATERIALS[mat].z;
+        }
+        // Force calculation update immediately after value change
+        triggerUpdate();
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        currentFileName = file.name;
+        const reader = new FileReader();
+        reader.onload = (event) => parseFileContent(event.target.result);
+        reader.readAsText(file);
+    });
+
+    function parseFileContent(text) {
+        const lines = text.split('\n');
+        const newData = [];
+        lines.forEach(line => {
+            line = line.trim();
+            if(!line) return;
+            const parts = line.split(/[\s,]+/).filter(p => p !== "");
+            if (parts.length >= 2) {
+                const t = parseFloat(parts[0]);
+                const f = parseFloat(parts[1]);
+                // Filter noise
+                if (!isNaN(t) && !isNaN(f) && f > 100000) {
+                    newData.push({ x: t, y: f });
+                }
+            }
+        });
+
+        if (newData.length > 0) {
+            loadData(newData);
+        } else {
+            alert("No valid frequency data found (>100kHz).");
+        }
+    }
+
+    function loadData(data) {
+        mainDataset = data;
+        if (mainDataset.length > 1) {
+            const tMin = mainDataset[0].x;
+            const tMax = mainDataset[mainDataset.length - 1].x;
+            cursorStart = tMin + (tMax - tMin) * 0.1;
+            cursorEnd = tMax - (tMax - tMin) * 0.1;
+        }
+        triggerUpdate();
+        updateChartCursors();
+    }
+
+    function refreshChart() {
+        chartInstance.data.datasets[0].data = mainDataset;
+        chartInstance.data.datasets[1].data = simDataset;
+
+        if (mainDataset.length > 0 || simDataset.length > 0) {
+            document.getElementById('emptyState').style.display = 'none';
+        } else {
+            document.getElementById('emptyState').style.display = 'block';
+        }
+
+        chartInstance.update('none'); 
+        if(chartInstance.scales.x.min === undefined && mainDataset.length > 0) {
+             chartInstance.resetZoom();
+        }
+    }
+
+    function resetChartZoom() {
+        if(chartInstance) chartInstance.resetZoom();
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('qcmChart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { 
+                datasets: [
+                    { 
+                        label: 'Experimental', 
+                        data: [], 
+                        borderColor: '#3b82f6', 
+                        borderWidth: 1.5, 
+                        pointRadius: 0, 
+                        tension: 0.1,
+                        order: 2 
+                    },
+                    { 
+                        label: 'Simulation', 
+                        data: [], 
+                        borderColor: '#f97316', 
+                        borderWidth: 2, 
+                        pointRadius: 0, 
+                        tension: 0.4, 
+                        borderDash: [5, 5], 
+                        order: 1 
+                    }
+                ] 
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: 'nearest', intersect: false },
+                scales: {
+                    x: { type: 'linear', title: { display: true, text: 'Time (s)' }, grid: { display: false } },
+                    y: { beginAtZero: false, title: { display: true, text: 'Frequency (Hz)' } }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 12 } },
+                    zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, mode: 'xy' } },
+                    annotation: {
+                        annotations: {
+                            lineStart: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'Base' } },
+                            lineEnd: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'End', position: 'end' } }
+                        }
+                    }
+                }
+            }
+        });
+        setupDragInteractions();
+    }
+
+    function setupDragInteractions() {
+        const canvas = document.getElementById('qcmChart');
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if(mainDataset.length === 0 && simDataset.length === 0) return;
+            const xVal = chartInstance.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left);
+            const range = chartInstance.scales.x.max - chartInstance.scales.x.min;
+            const threshold = range * 0.05;
+            if (Math.abs(xVal - cursorStart) < threshold) isDragging = 'start';
+            else if (Math.abs(xVal - cursorEnd) < threshold) isDragging = 'end';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            let val = chartInstance.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left);
+            
+            if (mainDataset.length > 0) {
+                const tMin = mainDataset[0].x;
+                const tMax = mainDataset[mainDataset.length-1].x;
+                val = Math.max(tMin, Math.min(tMax, val));
+            }
+
+            if (isDragging === 'start') {
+                if (val >= cursorEnd) val = cursorEnd - 0.1; 
+                cursorStart = val;
+            } else {
+                if (val <= cursorStart) val = cursorStart + 0.1; 
+                cursorEnd = val;
+            }
+
+            updateChartCursors();
+            triggerUpdate(); 
+        });
+        window.addEventListener('mouseup', () => isDragging = null);
+    }
+
+    function updateChartCursors() {
+        const pl = chartInstance.options.plugins.annotation.annotations;
+        pl.lineStart.xMin = pl.lineStart.xMax = cursorStart;
+        pl.lineEnd.xMin = pl.lineEnd.xMax = cursorEnd;
+        chartInstance.update('none');
+        document.getElementById('cursorVals').innerText = `Range: ${cursorStart.toFixed(1)}s - ${cursorEnd.toFixed(1)}s`;
+    }
+
+    function getInterpolatedFreq(timeVal) {
+        if (mainDataset.length === 0) return 0;
+        return mainDataset.reduce((prev, curr) => Math.abs(curr.x - timeVal) < Math.abs(prev.x - timeVal) ? curr : prev).y;
+    }
+
+    function updateCalculations() {
+        // Only run if we have some form of data (Loaded file OR Simulation active)
+        if (mainDataset.length === 0 && simDataset.length === 0) return;
+
+        let fStart = 0, fEnd = 0;
+        if (mainDataset.length > 0) {
+            fStart = getInterpolatedFreq(cursorStart);
+            fEnd = getInterpolatedFreq(cursorEnd);
+        } else if (simDataset.length > 0) {
+             fStart = simDataset[0].y;
+             fEnd = simDataset[simDataset.length-1].y;
+        }
+
+        const deltaF = fStart - fEnd;
+        const f0 = parseFloat(document.getElementById('crystalFreqInput').value) * 1e6;
+        const diam = parseFloat(document.getElementById('crystalDiam').value);
+        let rho_film = parseFloat(document.getElementById('density').value);
+        const z_film_ratio = parseFloat(document.getElementById('zFactor').value);
+        
+        // Safety: Avoid division by zero
+        if (rho_film <= 0 || isNaN(rho_film)) rho_film = 1;
+        // Area calculation: converts mm to cm for radius, calculates area in cm^2
+        const area = Math.PI * Math.pow((diam/10)/2, 2);
+        
+        let mass = 0, thickness = 0, method = "Sauerbrey";
+        if(f0 > 0 && area > 0) {
+            if (Math.abs(deltaF / f0) > 0.02) {
+                method = "Z-Match";
+                const term1 = Math.sqrt(RHO_Q * MU_Q) / (Math.PI * fEnd * z_film_ratio);
+                const term2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (f0 - fEnd) / f0 ));
+                const arealMass = term1 * term2; // g/cm^2
+                mass = arealMass * area; // g
+                thickness = arealMass / rho_film; // cm
+            } else {
+                // Sauerbrey: mass in grams, area in cm^2, f0 in Hz, rho_q/Mu_q in CGS
+                const C = (area * Math.sqrt(RHO_Q * MU_Q)) / (2 * Math.pow(f0, 2));
+                mass = deltaF * C; 
+                thickness = mass / (area * rho_film); // cm
+            }
+        }
+        
+        document.getElementById('resDeltaF').innerText = deltaF.toFixed(1) + " Hz";
+        document.getElementById('resMass').innerText = (mass * 1e6).toFixed(3) + " ug";
+        document.getElementById('resThickness').innerText = (thickness * 1e7).toFixed(2) + " nm";
+        
+        const methodEl = document.getElementById('methodUsed');
+        methodEl.innerText = method; 
+        methodEl.style.color = method === "Z-Match" ? "#ec4899" : "#3b82f6";
+    }
+
+    function generatePDF() {
+        if(mainDataset.length === 0 && simDataset.length === 0) return alert("No data to report.");
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const primaryColor = [59, 130, 246];
+
+        doc.setFontSize(20);
+        doc.setTextColor(...primaryColor);
+        doc.text("QCM Analysis Report", 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Source: ${window.location.href}`, 14, 28);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 33);
+        doc.text(`File: ${currentFileName}`, 14, 38);
+
+        let y = 50;
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'bold');
+        doc.text("Parameters", 14, y);
+        y += 7;
+
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        
+        // Grab values directly from inputs
+        const freq = document.getElementById('crystalFreqInput').value;
+        const diam = document.getElementById('crystalDiam').value; // Fixed: now reads input value directly
+        const mat = document.getElementById('materialSelect').options[document.getElementById('materialSelect').selectedIndex].text;
+        const rho = document.getElementById('density').value;
+        const z = document.getElementById('zFactor').value;
+
+        doc.text(`• Crystal: ${freq} MHz, ${diam} mm`, 20, y);
+        y += 5;
+        doc.text(`• Material: ${mat} (Density: ${rho} g/cm³, Z-Factor: ${z})`, 20, y);
+        y += 5;
+
+        if(document.getElementById('simPlotToggle').checked) {
+            const simDf = document.getElementById('simDeltaFInput').value;
+            doc.text(`• Simulation Target: ${simDf} Hz`, 20, y);
+            y += 5;
+        }
+
+        y += 10;
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text("Analysis Results", 14, y);
+        y += 7;
+
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        doc.text(`Method: ${document.getElementById('methodUsed').innerText}`, 20, y);
+        y+=5;
+        doc.text(`Delta Frequency: ${document.getElementById('resDeltaF').innerText}`, 20, y);
+        y+=5;
+        doc.text(`Calculated Mass: ${document.getElementById('resMass').innerText}`, 20, y);
+        y+=5;
+        
+        doc.setTextColor(...primaryColor);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Thickness: ${document.getElementById('resThickness').innerText}`, 20, y);
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+
+        const chartImg = chartInstance.toBase64Image();
+        doc.addImage(chartImg, 'PNG', 14, 100, 180, 100);
+        doc.save(`QCM_Report_${Date.now()}.pdf`);
+    }
+</script>
+</body>
+</html>
