@@ -98,5 +98,7 @@ Where:
 * **Hammer.js & chartjs-plugin-zoom:** Pan and zoom capabilities.
 * **jsPDF:** Client-side PDF generation.
 
-## 📄 License
+---
+
+## License
 MIT
