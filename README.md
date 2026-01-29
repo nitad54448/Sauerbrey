@@ -5,12 +5,13 @@
 ## Features
 
 * **Data Visualization:** Drag-and-drop support for `.dat`, `.txt`, and `.csv` files.
-* **Interactive Analysis:** * Interactive cursors to define analysis windows (Start/End).
+* **Interactive Analysis:**
+    * Interactive cursors to define analysis windows (Start/End).
     * Zoom and Pan capabilities for inspecting noisy data.
 * **Automatic Calculation:**
     * Real-time calculation of Mass, Thickness, and Deposition Rate.
-    * [cite_start]Automatic switching between **Sauerbrey** and **Z-Match** equations based on loading thresholds (2% frequency shift)[cite: 25].
-* [cite_start]**Ion Flux Fraction (IFF):** Dedicated module for calculating the ionic contribution to deposition flux by comparing "Reference" (Total) vs. "Neutral" rates.
+    * Automatic switching between **Sauerbrey** and **Z-Match** equations based on loading thresholds (2% frequency shift).
+* **Ion Flux Fraction (IFF):** Dedicated module for calculating the ionic contribution to deposition flux by comparing "Reference" (Total) vs. "Neutral" rates.
 * **Reporting:** Generates a PDF report including the chart, calculated parameters, and IFF results.
 * **Zero Dependencies:** Runs entirely in the browser using vanilla JS and CDNs (Chart.js, jsPDF).
 
@@ -18,11 +19,11 @@
 
 ## Usage
 
-1.  **Open:** Simply open `.html` in any modern web browser.
+1.  **Open:** Simply open the `.html` file in any modern web browser.
 2.  **Load Data:** Click **"Load Data File"** to upload your QCM frequency data (Time vs. Frequency).
     * *Format:* Two columns (Time, Frequency) separated by tabs, spaces, or commas.
 3.  **Set Parameters:**
-    * [cite_start]**Crystal Freq/Diameter:** Defaults are set for standard 6 MHz / 10mm crystals[cite: 9].
+    * **Crystal Freq/Diameter:** Defaults are set for standard 6 MHz / 10mm crystals.
     * **Material:** Select a preset (Au, Ti, SiO2, etc.) or enter custom Density and Z-Factor values.
 4.  **Analyze (Interactive Chart):**
     * **Move Cursors:** Click and drag anywhere on the chart to move the **Start** and **End** range cursors.
@@ -30,7 +31,7 @@
     * The tool calculates the frequency shift ($\Delta f$) and thickness change between these two cursors.
 5.  **Calculate IFF (Optional):**
     * Measure the rate during a "Reference" phase (Ions + Neutrals). Click **Set Current as Ref**.
-    * Measure the rate during a "Neutral only" phase. [cite_start]The tool will automatically calculate the IFF percentage[cite: 79].
+    * Measure the rate during a "Neutral only" phase. The tool will automatically calculate the IFF percentage.
 6.  **Export:** Click **Download Report** to save a PDF summary.
 
 ---
@@ -39,22 +40,22 @@
 
 ### 1. Physical Constants ($AT$-cut Quartz)
 The tool uses standard physical constants:
-* [cite_start]**Density ($\rho_q$):** $2.648 \text{ g/cm}^3$ [cite: 10]
-* **Shear Modulus ($\mu_q$):** $2.947 \times 10^{11} \text{ g/cm}\cdot\text{s}^2$ [cite: 10]
+* **Density ($\rho_q$):** $2.648 \text{ g/cm}^3$
+* **Shear Modulus ($\mu_q$):** $2.947 \times 10^{11} \text{ g/cm}\cdot\text{s}^2$
 
 ### 2. Calculation Methods
 
 The tool automatically selects the appropriate equation based on the frequency shift magnitude.
 
 #### A. The Sauerbrey Equation
-[cite_start]**Condition:** Used when ratio $R(t) = \frac{|f_L - f_U|}{f_U} < 0.02$ [cite: 25]
+**Condition:** Used when ratio $R(t) = \frac{|f_L - f_U|}{f_U} < 0.02$
 
-Assumes the film is rigid and thin. $Z$-Factor is ignored ($Z_{ratio} = 1$).
+Assumes the film is rigid and thin. The Z-Factor is ignored ($Z_{ratio} = 1$).
 
 $$\Delta m = - \frac{A \sqrt{\rho_q \mu_q}}{2 f_0^2} \Delta f$$
 
 #### B. The Z-Match Equation (Lu and Lewis)
-[cite_start]**Condition:** Used when $R(t) \geq 0.02$ [cite: 33]
+**Condition:** Used when $R(t) \geq 0.02$
 
 Corrects for the acoustic impedance mismatch between quartz and the film material.
 *Note: The formula below includes the derived constants used in the code.*
@@ -65,13 +66,13 @@ Where:
 * $\sigma$ = Areal mass density (g/cm²)
 * $f_0$ = Fundamental frequency (unload/start)
 * $f_{end}$ = Loaded frequency
-* [cite_start]$Z_{ratio}$ = Z-Factor ($\sqrt{\rho_q \mu_q / \rho_f \mu_f}$) [cite: 17]
+* $Z_{ratio}$ = Z-Factor ($\sqrt{\rho_q \mu_q / \rho_f \mu_f}$)
 
 ### 3. Ion Flux Fraction (IFF)
-The IFF determines the fraction of the deposition flux contributed by ions vs. neutrals. [cite_start]It assumes the film density and composition remain constant between configurations[cite: 53].
+The IFF determines the fraction of the deposition flux contributed by ions vs. neutrals. It assumes the film density and composition remain constant between configurations.
 
 **Theory:**
-[cite_start]Since deposition flux ($\Gamma$) is proportional to deposition rate ($v_e$)[cite: 60], we can compare the rates directly:
+Since deposition flux ($\Gamma$) is proportional to deposition rate ($v_e$), we can compare the rates directly:
 
 1.  **Reference Config ($v_{tot}$):** Ions + Neutrals are deposited.
 2.  **Neutral Config ($v_{neutre}$):** Ions are repelled; only neutrals deposited.
