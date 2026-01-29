@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QCM Analyst</title>
+    <title>QCM Analyst - IFF & Z-Match Edition</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
@@ -22,38 +22,27 @@
             --border-dark: #334155;
             --bg-stage: #f1f5f9;
             --bg-card: #ffffff;
+            --iff-color: #10b981;
         }
 
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-dark);
+            height: 100vh;
+            display: grid;
+            /* FIXED: Ensure minmax handles sidebar scaling better */
+            grid-template-columns: minmax(350px, 30%) 6px 1fr; 
+            overflow: hidden;
+        }
 
-body {
-    margin: 0;
-    font-family: 'Inter', system-ui, sans-serif;
-    background-color: var(--bg-dark);
-    height: 100vh;
-    display: grid;
-    grid-template-columns: minmax(300px, 30%) 6px 1fr; 
-    overflow: hidden;
-}
-
-/
-.gutter {
-    background-color: var(--border-dark);
-    cursor: col-resize;
-    transition: background-color 0.2s;
-    z-index: 50; 
-}
-.gutter:hover, .gutter.active {
-    background-color: var(--accent);
-}
-
-.chart-controls {
-    position: absolute;
-    top: 15px;
-    right: 15px; /* Moved to right */
-    left: auto;  /* Remove left positioning */
-    z-index: 10;
-}
-
+        .gutter {
+            background-color: var(--border-dark);
+            cursor: col-resize;
+            transition: background-color 0.2s;
+            z-index: 50; 
+        }
+        .gutter:hover, .gutter.active { background-color: var(--accent); }
 
         .sidebar {
             background-color: var(--panel-dark);
@@ -79,6 +68,8 @@ body {
             font-weight: 700;
         }
 
+        .iff-header { color: var(--iff-color); }
+
         .control-group { margin-bottom: 0; }
         label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
         
@@ -95,7 +86,6 @@ body {
         }
         select:focus, input:focus { outline: 2px solid var(--accent); border-color: transparent; }
 
-        /* GRID SYSTEM */
         .input-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -127,20 +117,8 @@ body {
         .file-upload-btn:hover { background: #475569; border-color: var(--accent); }
         input[type="file"] { display: none; }
 
-        /* PANELS */
-        .sim-panel {
-            background: rgba(59, 130, 246, 0.05);
-            border: 1px solid var(--border-dark);
-            padding: 10px;
-            border-radius: 6px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-        .checkbox-wrapper { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-light); font-weight: 500; font-size: 0.85rem; margin-bottom: 8px;}
-        input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
-
-        .thickness-card {
+        /* RESULT CARDS */
+        .result-card {
             background: rgba(59, 130, 246, 0.1);
             border: 1px solid var(--accent);
             border-radius: 6px;
@@ -151,8 +129,14 @@ body {
             align-items: center;
             text-align: center;
         }
-        .thickness-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;}
-        .thickness-val { font-size: 1.4rem; font-weight: 700; color: var(--accent); font-family: monospace; margin-top: 4px; }
+        .result-card.iff {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--iff-color);
+        }
+        
+        .res-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;}
+        .res-val { font-size: 1.2rem; font-weight: 700; color: white; font-family: monospace; margin-top: 4px; }
+        .res-sub { font-size: 0.7rem; color: #94a3b8; margin-top: 4px; }
 
         .secondary-results {
             display: flex;
@@ -165,7 +149,7 @@ body {
         }
         .sec-res-item span:last-child { font-family: monospace; font-weight: bold; color: white; margin-left: 5px; }
 
-        .btn-primary {
+        .btn-primary, .btn-iff {
             background: var(--accent);
             color: white;
             border: none;
@@ -174,8 +158,10 @@ body {
             width: 100%;
             cursor: pointer;
             font-weight: 600;
-            margin-top: auto; 
+            margin-top: 10px; 
         }
+        .btn-iff { background: #334155; border: 1px solid var(--iff-color); color: var(--iff-color); margin-top: 0;}
+        .btn-iff:hover { background: var(--iff-color); color: white; }
         .btn-primary:hover { background: var(--accent-hover); }
 
         /* --- STAGE --- */
@@ -187,7 +173,9 @@ body {
             color: #334155;
             height: 100vh;
             box-sizing: border-box;
-            overflow: hidden;
+            /* FIXED: Overflow hidden prevents grid blowout */
+            overflow: hidden; 
+            min-width: 0;
         }
 
         .chart-wrapper {
@@ -198,8 +186,11 @@ body {
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             position: relative;
             padding: 10px;
-            min-height: 0;
+            /* FIXED: These properties ensure the canvas shrinks with the window */
             min-width: 0;
+            min-height: 0;
+            width: 100%;
+            overflow: hidden; 
         }
 
         .chart-controls {
@@ -242,7 +233,7 @@ body {
     <div class="sidebar">
         <div class="header">
             <h2>QCM Analyst</h2>
-            <div>Data & Overlay</div>
+            <div>IFF & Z-Match</div>
         </div>
 
         <label for="fileInput" class="file-upload-btn" id="fileBtn">
@@ -255,7 +246,7 @@ body {
         <div class="input-row">
             <div class="control-group">
                 <label>Crystal Freq (MHz)</label>
-                <input type="number" id="crystalFreqInput" value="5" step="0.1" oninput="triggerUpdate()">
+                <input type="number" id="crystalFreqInput" value="6" step="0.1" oninput="triggerUpdate()">
             </div>
             <div class="control-group">
                 <label>Active Diameter (mm)</label>
@@ -281,7 +272,7 @@ body {
         <div class="input-row">
             <div class="control-group">
                 <label>Density ($\rho$)</label>
-                <input type="number" id="density" value="4.50" step="0.01" oninput="triggerUpdate()">
+                <input type="number" id="density" value="4.506" step="0.001" oninput="triggerUpdate()">
             </div>
             <div class="control-group">
                 <label>Z-Factor</label>
@@ -289,36 +280,46 @@ body {
             </div>
         </div>
 
-        <h3>Simulation & Results</h3>
+        <h3>Analysis & Results</h3>
 
         <div class="sim-result-row">
-            <div class="sim-panel">
-                <label class="checkbox-wrapper">
-                    <input type="checkbox" id="simPlotToggle" onchange="triggerUpdate()">
-                    Plot Sim
-                </label>
-                <div style="margin-top: auto;">
-                    <label style="font-size: 0.75rem;">Target $\Delta F$ (Hz)</label>
-                    <input type="number" id="simDeltaFInput" value="0" step="10" oninput="triggerUpdate()">
-                </div>
+            <div class="result-card">
+                <div class="res-label">Thickness</div>
+                <div id="resThickness" class="res-val" style="color: var(--accent);">0 nm</div>
+                <div id="methodUsed" class="res-sub">Sauerbrey</div>
             </div>
 
-            <div class="thickness-card">
-                <div class="thickness-label">Thickness</div>
-                <div id="resThickness" class="thickness-val">0 nm</div>
-                <div id="methodUsed" style="font-size:0.7rem; color:#94a3b8; margin-top:4px;">Sauerbrey</div>
+            <div class="result-card">
+                <div class="res-label">Dep. Rate ($v_e$)</div>
+                <div id="resRate" class="res-val" style="color: #fbbf24;">0.00</div>
+                <div class="res-sub">nm/s</div>
             </div>
         </div>
 
         <div class="secondary-results">
             <div class="sec-res-item">ΔF: <span id="resDeltaF">0 Hz</span></div>
-            <div class="sec-res-item">Mass: <span id="resMass">0 ug</span></div>
+            <div class="sec-res-item">Ratio R(t): <span id="resRatio">0%</span></div>
+        </div>
+
+        <h3 class="iff-header">Ion Flux Fraction (IFF)</h3>
+        <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px;">
+            <div class="input-row" style="margin-bottom: 10px;">
+                <div class="control-group">
+                    <label>Reference Rate ($v_{tot}$)</label>
+                    <input type="number" id="refRateInput" value="0" step="0.01" oninput="updateIFF()">
+                </div>
+                <button class="btn-iff" onclick="captureReference()">Set Current as Ref</button>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.9rem; color: #94a3b8;">IFF Result:</span>
+                <span id="resIFF" style="font-family: monospace; font-size: 1.2rem; font-weight: bold; color: var(--iff-color);">-- %</span>
+            </div>
         </div>
 
         <button class="btn-primary" onclick="generatePDF()">Download Report</button>
     </div>
 
-        <div class="gutter" id="resizeHandle"></div>
+    <div class="gutter" id="resizeHandle"></div>
 
     <div class="main-stage">
         <div class="chart-wrapper">
@@ -333,11 +334,11 @@ body {
                     <path d="M12 3v12"></path>
                 </svg>
                 <h3>Ready</h3>
-                <p>Load .dat file or toggle Simulation.</p>
+                <p>Load .dat file to begin analysis.</p>
             </div>
         </div>
         <div class="info-bar">
-            <span><strong>Controls:</strong> Drag to Pan • Scroll to Zoom • Move Cursors to fit Simulation.</span>
+            <span><strong>Controls:</strong> Drag to Move Cursors • <strong>Ctrl+Drag</strong> to Pan • Scroll to Zoom.</span>
             <span id="cursorVals">Range: 0s - 0s</span>
         </div>
     </div>
@@ -349,8 +350,8 @@ body {
     const MATERIALS = {
         'Au': { rho: 19.30, z: 0.381 },
         'Ag': { rho: 10.50, z: 0.529 },
-        'Cr': { rho: 7.19,  z: 0.305 },
-        'Ti': { rho: 4.50,  z: 0.628 },
+        'Cr': { rho: 7.19,  z: 0.305 },  
+        'Ti': { rho: 4.506, z: 0.628 },  
         'Pt': { rho: 21.45, z: 0.245 },
         'Cu': { rho: 8.96,  z: 0.437 },
         'Al': { rho: 2.70,  z: 1.080 },
@@ -359,26 +360,25 @@ body {
 
     let chartInstance = null;
     let mainDataset = []; 
-    let simDataset = [];  
     let cursorStart = 0;
     let cursorEnd = 0;
     let isDragging = null;
     let currentFileName = "Analysis";
+    let fUnload = 0; 
 
     document.addEventListener('DOMContentLoaded', () => {
         initChart();
         handleMaterialChange(); 
     });
 
-
-    
+    // Resize Logic
     const gutter = document.getElementById('resizeHandle');
     let isResizingSidebar = false;
 
     gutter.addEventListener('mousedown', (e) => {
         isResizingSidebar = true;
-        gutter.classList.add('active'); // Highlight the bar
-        document.body.style.cursor = 'col-resize'; // Force cursor globally
+        gutter.classList.add('active');
+        document.body.style.cursor = 'col-resize';
         e.preventDefault(); 
     });
 
@@ -387,7 +387,6 @@ body {
         let newWidth = e.clientX;
         if (newWidth < 300) newWidth = 300;
         if (newWidth > 600) newWidth = 600;
-
         document.body.style.gridTemplateColumns = `${newWidth}px 6px 1fr`;
         if(chartInstance) chartInstance.resize();
     });
@@ -400,52 +399,13 @@ body {
         }
     });
 
-
+    // FIXED: Listen to window resize to fix "going under" issues
+    window.addEventListener('resize', () => {
+        if(chartInstance) chartInstance.resize();
+    });
 
     function triggerUpdate() {
-        updateSimulation();
         updateCalculations();
-    }
-
-    function updateSimulation() {
-        const shouldPlot = document.getElementById('simPlotToggle').checked;
-        const deltaF = parseFloat(document.getElementById('simDeltaFInput').value) || 0;
-        
-        simDataset = [];
-
-        if (shouldPlot) {
-            let tStart = 0, tEnd = 100;
-            // Always get current Frequency input
-            let fStart = parseFloat(document.getElementById('crystalFreqInput').value) * 1e6;
-
-            if (mainDataset.length > 0) {
-                // If data exists, align simulation to the data at cursor positions
-                tStart = cursorStart;
-                tEnd = cursorEnd;
-                // Get exact frequency at start cursor for smooth alignment
-                fStart = getInterpolatedFreq(cursorStart);
-            } else {
-                if(cursorEnd > 0) {
-                    tStart = cursorStart;
-                    tEnd = cursorEnd;
-                }
-            }
-
-            const points = 100; 
-            const step = (tEnd - tStart) / points;
-            const centerT = tStart + (tEnd - tStart) / 2;
-            const range = tEnd - tStart;
-            // Adjust sigmoid steepness based on time range width
-            const k = range > 0 ? (10 / range) : 0.5;
-
-            for (let i = 0; i <= points; i++) {
-                const t = tStart + (i * step);
-                const sigmoid = 1 / (1 + Math.exp(-k * (t - centerT)));
-                const y = fStart - (deltaF * sigmoid);
-                simDataset.push({ x: t, y: y });
-            }
-        }
-        refreshChart();
     }
 
     function handleMaterialChange() {
@@ -457,7 +417,6 @@ body {
             rhoInput.value = MATERIALS[mat].rho;
             zInput.value = MATERIALS[mat].z;
         }
-        // Force calculation update immediately after value change
         triggerUpdate();
     }
 
@@ -480,7 +439,6 @@ body {
             if (parts.length >= 2) {
                 const t = parseFloat(parts[0]);
                 const f = parseFloat(parts[1]);
-                // Filter noise
                 if (!isNaN(t) && !isNaN(f) && f > 100000) {
                     newData.push({ x: t, y: f });
                 }
@@ -496,26 +454,23 @@ body {
 
     function loadData(data) {
         mainDataset = data;
+        fUnload = mainDataset[0].y; 
+
         if (mainDataset.length > 1) {
             const tMin = mainDataset[0].x;
             const tMax = mainDataset[mainDataset.length - 1].x;
             cursorStart = tMin + (tMax - tMin) * 0.1;
             cursorEnd = tMax - (tMax - tMin) * 0.1;
         }
-        triggerUpdate();
+        
+        refreshChart();
         updateChartCursors();
+        triggerUpdate();
     }
 
     function refreshChart() {
         chartInstance.data.datasets[0].data = mainDataset;
-        chartInstance.data.datasets[1].data = simDataset;
-
-        if (mainDataset.length > 0 || simDataset.length > 0) {
-            document.getElementById('emptyState').style.display = 'none';
-        } else {
-            document.getElementById('emptyState').style.display = 'block';
-        }
-
+        document.getElementById('emptyState').style.display = mainDataset.length > 0 ? 'none' : 'block';
         chartInstance.update('none'); 
         if(chartInstance.scales.x.min === undefined && mainDataset.length > 0) {
              chartInstance.resetZoom();
@@ -533,23 +488,13 @@ body {
             data: { 
                 datasets: [
                     { 
-                        label: 'Experimental', 
+                        label: 'Experimental f(t)', 
                         data: [], 
                         borderColor: '#3b82f6', 
                         borderWidth: 1.5, 
                         pointRadius: 0, 
                         tension: 0.1,
                         order: 2 
-                    },
-                    { 
-                        label: 'Simulation', 
-                        data: [], 
-                        borderColor: '#f97316', 
-                        borderWidth: 2, 
-                        pointRadius: 0, 
-                        tension: 0.4, 
-                        borderDash: [5, 5], 
-                        order: 1 
                     }
                 ] 
             },
@@ -564,10 +509,14 @@ body {
                 },
                 plugins: {
                     legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 12 } },
-                    zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, mode: 'xy' } },
+                    zoom: { 
+                        // FIXED: Added modifierKey to prevent conflict with cursor dragging
+                        pan: { enabled: true, mode: 'xy', modifierKey: 'ctrl' }, 
+                        zoom: { wheel: { enabled: true }, mode: 'xy' } 
+                    },
                     annotation: {
                         annotations: {
-                            lineStart: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'Base' } },
+                            lineStart: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'Start' } },
                             lineEnd: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'End', position: 'end' } }
                         }
                     }
@@ -581,7 +530,10 @@ body {
         const canvas = document.getElementById('qcmChart');
         
         canvas.addEventListener('mousedown', (e) => {
-            if(mainDataset.length === 0 && simDataset.length === 0) return;
+            // FIXED: Ignore drag if Ctrl is pressed (let Zoom plugin handle pan)
+            if(e.ctrlKey) return; 
+
+            if(mainDataset.length === 0) return;
             const xVal = chartInstance.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left);
             const range = chartInstance.scales.x.max - chartInstance.scales.x.min;
             const threshold = range * 0.05;
@@ -623,74 +575,124 @@ body {
 
     function getInterpolatedFreq(timeVal) {
         if (mainDataset.length === 0) return 0;
-        return mainDataset.reduce((prev, curr) => Math.abs(curr.x - timeVal) < Math.abs(prev.x - timeVal) ? curr : prev).y;
+        const nearest = mainDataset.reduce((prev, curr) => Math.abs(curr.x - timeVal) < Math.abs(prev.x - timeVal) ? curr : prev);
+        return nearest.y;
     }
 
     function updateCalculations() {
-        // Only run if we have some form of data (Loaded file OR Simulation active)
-        if (mainDataset.length === 0 && simDataset.length === 0) return;
+        if (mainDataset.length === 0) return;
 
-        let fStart = 0, fEnd = 0;
-        if (mainDataset.length > 0) {
-            fStart = getInterpolatedFreq(cursorStart);
-            fEnd = getInterpolatedFreq(cursorEnd);
-        } else if (simDataset.length > 0) {
-             fStart = simDataset[0].y;
-             fEnd = simDataset[simDataset.length-1].y;
-        }
+        const fStart = getInterpolatedFreq(cursorStart);
+        const fEnd = getInterpolatedFreq(cursorEnd); 
 
-        const deltaF = fStart - fEnd;
-        const f0 = parseFloat(document.getElementById('crystalFreqInput').value) * 1e6;
+        const nominalF0 = parseFloat(document.getElementById('crystalFreqInput').value) * 1e6;
         const diam = parseFloat(document.getElementById('crystalDiam').value);
         let rho_film = parseFloat(document.getElementById('density').value);
         const z_film_ratio = parseFloat(document.getElementById('zFactor').value);
         
-        // Safety: Avoid division by zero
         if (rho_film <= 0 || isNaN(rho_film)) rho_film = 1;
-        // Area calculation: converts mm to cm for radius, calculates area in cm^2
-        const area = Math.PI * Math.pow((diam/10)/2, 2);
-        
+
+        const area = Math.PI * Math.pow((diam/10)/2, 2); 
+
+        const ratio = Math.abs((fEnd - fUnload) / fUnload);
+        const deltaF = fEnd - fUnload; 
+
         let mass = 0, thickness = 0, method = "Sauerbrey";
-        if(f0 > 0 && area > 0) {
-            if (Math.abs(deltaF / f0) > 0.02) {
+
+        if(nominalF0 > 0 && area > 0) {
+            
+            if (ratio >= 0.02) {
                 method = "Z-Match";
-                const term1 = Math.sqrt(RHO_Q * MU_Q) / (Math.PI * fEnd * z_film_ratio);
-                const term2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (f0 - fEnd) / f0 ));
-                const arealMass = term1 * term2; // g/cm^2
-                mass = arealMass * area; // g
-                thickness = arealMass / rho_film; // cm
+                // FIXED: Added division by 2 to term1. 
+                // PDF says Nq*rho_q, which is sqrt(rho_q*mu_q)/2.
+                const term1 = Math.sqrt(RHO_Q * MU_Q) / (2 * Math.PI * fEnd * z_film_ratio);
+                const term2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (fUnload - fEnd) / fUnload ));
+                
+                const arealMass = term1 * term2; 
+                mass = arealMass * area; 
+                thickness = arealMass / rho_film; 
+
             } else {
-                // Sauerbrey: mass in grams, area in cm^2, f0 in Hz, rho_q/Mu_q in CGS
-                const C = (area * Math.sqrt(RHO_Q * MU_Q)) / (2 * Math.pow(f0, 2));
-                mass = deltaF * C; 
-                thickness = mass / (area * rho_film); // cm
+                method = "Sauerbrey";
+                const C = (area * Math.sqrt(RHO_Q * MU_Q)) / (2 * Math.pow(nominalF0, 2));
+                mass = Math.abs(deltaF) * C; 
+                thickness = mass / (area * rho_film); 
             }
         }
         
-        document.getElementById('resDeltaF').innerText = deltaF.toFixed(1) + " Hz";
-        document.getElementById('resMass').innerText = (mass * 1e6).toFixed(3) + " ug";
-        document.getElementById('resThickness').innerText = (thickness * 1e7).toFixed(2) + " nm";
+        const getThickAtF = (f) => {
+            const locDelta = f - fUnload;
+            const locRatio = Math.abs(locDelta / fUnload);
+            if(locRatio >= 0.02) {
+                 // FIXED: Added division by 2 here as well for consistency
+                 const t1 = Math.sqrt(RHO_Q * MU_Q) / (2 * Math.PI * f * z_film_ratio);
+                 const t2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (fUnload - f) / fUnload ));
+                 return (t1 * t2) / rho_film;
+            } else {
+                 const C = (Math.sqrt(RHO_Q * MU_Q)) / (2 * Math.pow(nominalF0, 2)); 
+                 return (Math.abs(locDelta) * C) / rho_film;
+            }
+        };
+
+        const thickStart = getThickAtF(fStart);
+        const thickEnd = getThickAtF(fEnd);
+        const dt = cursorEnd - cursorStart;
         
+        let rate = 0;
+        if(dt > 0.1) {
+            rate = (thickEnd - thickStart) / dt; 
+        }
+
+        document.getElementById('resDeltaF').innerText = deltaF.toFixed(1) + " Hz";
+        document.getElementById('resRatio').innerText = (ratio * 100).toFixed(3) + "%";
+        document.getElementById('resThickness').innerText = (thickEnd * 1e7).toFixed(2) + " nm";
+        
+        const rateNm = rate * 1e7;
+        document.getElementById('resRate').innerText = rateNm.toFixed(3);
+
         const methodEl = document.getElementById('methodUsed');
         methodEl.innerText = method; 
         methodEl.style.color = method === "Z-Match" ? "#ec4899" : "#3b82f6";
+
+        updateIFF(rateNm);
+    }
+
+    function captureReference() {
+        const currentRate = parseFloat(document.getElementById('resRate').innerText);
+        document.getElementById('refRateInput').value = currentRate;
+        updateIFF();
+    }
+
+    function updateIFF(currentRateNm = null) {
+        const v_tot = parseFloat(document.getElementById('refRateInput').value);
+        const v_neutre = currentRateNm !== null ? currentRateNm : parseFloat(document.getElementById('resRate').innerText);
+        const iffEl = document.getElementById('resIFF');
+        
+        if(v_tot === 0) {
+            iffEl.innerText = "-- %";
+            return;
+        }
+
+        const iff = 1 - (v_neutre / v_tot);
+        const iffPercent = iff * 100;
+        
+        iffEl.innerText = iffPercent.toFixed(1) + " %";
     }
 
     function generatePDF() {
-        if(mainDataset.length === 0 && simDataset.length === 0) return alert("No data to report.");
+        if(mainDataset.length === 0) return alert("No data to report.");
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         const primaryColor = [59, 130, 246];
 
         doc.setFontSize(20);
         doc.setTextColor(...primaryColor);
-        doc.text("QCM Analysis Report", 14, 20);
+        doc.text("QCM Analysis Report (IFF Edition)", 14, 20);
         
         doc.setFontSize(10);
         doc.setTextColor(100);
-        doc.text(`Source: ${window.location.href}`, 14, 28);
+        doc.text(`File: ${currentFileName}`, 14, 28);
         doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 33);
-        doc.text(`File: ${currentFileName}`, 14, 38);
 
         let y = 50;
         doc.setFontSize(12);
@@ -702,9 +704,8 @@ body {
         doc.setFont(undefined, 'normal');
         doc.setFontSize(10);
         
-        // Grab values directly from inputs
         const freq = document.getElementById('crystalFreqInput').value;
-        const diam = document.getElementById('crystalDiam').value; // Fixed: now reads input value directly
+        const diam = document.getElementById('crystalDiam').value;
         const mat = document.getElementById('materialSelect').options[document.getElementById('materialSelect').selectedIndex].text;
         const rho = document.getElementById('density').value;
         const z = document.getElementById('zFactor').value;
@@ -712,37 +713,35 @@ body {
         doc.text(`• Crystal: ${freq} MHz, ${diam} mm`, 20, y);
         y += 5;
         doc.text(`• Material: ${mat} (Density: ${rho} g/cm³, Z-Factor: ${z})`, 20, y);
-        y += 5;
-
-        if(document.getElementById('simPlotToggle').checked) {
-            const simDf = document.getElementById('simDeltaFInput').value;
-            doc.text(`• Simulation Target: ${simDf} Hz`, 20, y);
-            y += 5;
-        }
-
         y += 10;
+
         doc.setFontSize(12);
         doc.setFont(undefined, 'bold');
-        doc.text("Analysis Results", 14, y);
+        doc.text("Analysis Window Results", 14, y);
         y += 7;
 
         doc.setFont(undefined, 'normal');
         doc.setFontSize(10);
-        doc.text(`Method: ${document.getElementById('methodUsed').innerText}`, 20, y);
+        doc.text(`Method Used: ${document.getElementById('methodUsed').innerText} (Ratio: ${document.getElementById('resRatio').innerText})`, 20, y);
         y+=5;
-        doc.text(`Delta Frequency: ${document.getElementById('resDeltaF').innerText}`, 20, y);
-        y+=5;
-        doc.text(`Calculated Mass: ${document.getElementById('resMass').innerText}`, 20, y);
+        doc.text(`Frequency Shift (End): ${document.getElementById('resDeltaF').innerText}`, 20, y);
         y+=5;
         
-        doc.setTextColor(...primaryColor);
         doc.setFont(undefined, 'bold');
-        doc.text(`Thickness: ${document.getElementById('resThickness').innerText}`, 20, y);
+        doc.text(`Total Thickness: ${document.getElementById('resThickness').innerText}`, 20, y);
+        y+=5;
+        doc.text(`Deposition Rate: ${document.getElementById('resRate').innerText} nm/s`, 20, y);
+        y+=10;
+
+        doc.setTextColor(...primaryColor);
+        doc.text(`IFF Result: ${document.getElementById('resIFF').innerText}`, 20, y);
+        doc.text(`(Ref Rate: ${document.getElementById('refRateInput').value} nm/s)`, 60, y);
+        
         doc.setTextColor(0);
         doc.setFont(undefined, 'normal');
 
         const chartImg = chartInstance.toBase64Image();
-        doc.addImage(chartImg, 'PNG', 14, 100, 180, 100);
+        doc.addImage(chartImg, 'PNG', 14, 110, 180, 100);
         doc.save(`QCM_Report_${Date.now()}.pdf`);
     }
 </script>
