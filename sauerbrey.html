@@ -3,778 +3,651 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QCM Analyst - IFF & Z-Match Edition</title>
+    <title>QCM</title>
     
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+   
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+  Chart.register(
+    ChartZoom,
+    ChartAnnotation
+  );
+</script>
+
 
     <style>
         :root {
-            --bg-dark: #0f172a;
-            --panel-dark: #1e293b;
+            --bg-app: #0f172a;
+            --panel: #1e293b;
+            --border: #334155;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
             --accent: #3b82f6;
             --accent-hover: #2563eb;
-            --text-light: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-dark: #334155;
-            --bg-stage: #f1f5f9;
-            --bg-card: #ffffff;
-            --iff-color: #10b981;
+            --success: #10b981;
+            --warn: #f59e0b;
+            --error: #ef4444;
+            --chart-r: #ec4899;
+            --chart-p: #f59e0b;
         }
 
         body {
-            margin: 0;
-            font-family: 'Inter', system-ui, sans-serif;
-            background-color: var(--bg-dark);
-            height: 100vh;
-            display: grid;
-            /* FIXED: Ensure minmax handles sidebar scaling better */
-            grid-template-columns: minmax(350px, 30%) 6px 1fr; 
-            overflow: hidden;
+            margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-app); color: var(--text-main); height: 100vh;
+            display: grid; grid-template-columns: 340px 4px 1fr; overflow: hidden;
         }
 
-        .gutter {
-            background-color: var(--border-dark);
-            cursor: col-resize;
-            transition: background-color 0.2s;
-            z-index: 50; 
-        }
-        .gutter:hover, .gutter.active { background-color: var(--accent); }
-
+        /* --- SIDEBAR --- */
         .sidebar {
-            background-color: var(--panel-dark);
-            border-right: 1px solid var(--border-dark);
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            overflow-y: auto;
-            color: var(--text-light);
-            z-index: 20;
-            min-width: 350px;
+            background: var(--panel); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; height: 100vh;
         }
 
-        .header h2 { font-size: 1.4rem; margin: 0; font-weight: 600; }
-        .header div { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px; }
+        .sb-header { padding: 15px 20px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); flex-shrink: 0; }
+        .sb-header h2 { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.5px; }
+        .sb-header small { color: var(--text-dim); font-size: 0.8rem; }
 
-        h3 { 
-            font-size: 0.75rem; 
-            text-transform: uppercase; 
-            color: var(--accent); 
-            margin: 15px 0 8px 0; 
-            letter-spacing: 1px; 
-            font-weight: 700;
+        /* SCROLLABLE CONTENT AREA */
+        .sb-content { 
+            flex: 1; 
+            overflow-y: auto; /* Vertical scrollbar only if needed */
+            padding: 20px; 
+            display: flex; flex-direction: column; gap: 20px; 
         }
 
-        .iff-header { color: var(--iff-color); }
+        /* SMART CONNECT BUTTON */
+        .btn-connect {
+            background: var(--accent); color: white; border: none; padding: 12px; border-radius: 6px; 
+            font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+            transition: all 0.2s; font-size: 0.9rem; width: 100%; text-align: center;
+            border: 1px solid transparent;
+        }
+        .btn-connect:hover { background: var(--accent-hover); }
+        .btn-connect.active { background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--success); }
+        .btn-connect.error { border-color: var(--error); color: var(--error); }
 
-        .control-group { margin-bottom: 0; }
-        label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
+        /* LED INSIDE BUTTON */
+        .btn-led { width: 8px; height: 8px; border-radius: 50%; background: white; display: none; box-shadow: 0 0 5px rgba(255,255,255,0.8); }
+        .btn-connect.active .btn-led { display: block; background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .btn-connect.active .btn-led.blink { opacity: 0.3; }
+        .btn-connect.error .btn-led { display: block; background: var(--error); box-shadow: 0 0 8px var(--error); }
+
+        /* PARAMETERS */
+        .section-title { font-size: 0.7rem; text-transform: uppercase; color: var(--accent); font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .input-group label { display: block; font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px; }
         
-        select, input[type="number"], input[type="text"] {
-            width: 100%;
-            background: #0f172a;
-            border: 1px solid var(--border-dark);
-            color: white;
-            padding: 8px;
-            border-radius: 4px;
-            font-size: 0.9rem;
-            box-sizing: border-box;
-            height: 38px;
+        input, select {
+            width: 100%; background: #334155; border: 1px solid var(--border); color: white;
+            padding: 6px; border-radius: 4px; font-size: 0.9rem; box-sizing: border-box;
         }
-        select:focus, input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+        input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
 
-        .input-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 12px;
+        /* RESULTS BOX */
+        .results-panel {
+            background: rgba(59, 130, 246, 0.08); border: 1px solid var(--border); border-radius: 6px; padding: 15px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center;
         }
-
-        .sim-result-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 10px;
-            align-items: stretch;
-        }
-
-        .file-upload-btn {
-            background: #334155;
-            color: white;
-            padding: 12px;
-            border-radius: 6px;
-            text-align: center;
-            cursor: pointer;
-            border: 1px dashed #64748b;
-            transition: all 0.2s;
-            margin-bottom: 20px;
-            font-size: 0.95rem;
-            display: block;
-        }
-        .file-upload-btn:hover { background: #475569; border-color: var(--accent); }
-        input[type="file"] { display: none; }
-
-        /* RESULT CARDS */
-        .result-card {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid var(--accent);
-            border-radius: 6px;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-        }
-        .result-card.iff {
-            background: rgba(16, 185, 129, 0.1);
-            border-color: var(--iff-color);
-        }
+        .res-val { font-size: 1.3rem; font-weight: 700; font-family: monospace; margin: 4px 0; }
+        .res-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; }
         
-        .res-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;}
-        .res-val { font-size: 1.2rem; font-weight: 700; color: white; font-family: monospace; margin-top: 4px; }
-        .res-sub { font-size: 0.7rem; color: #94a3b8; margin-top: 4px; }
+        .meta-info { font-size: 0.8rem; font-family: monospace; color: var(--text-dim); margin-top: 10px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; }
+        .meta-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .val-highlight { color: #fff; font-weight: 600; }
 
-        .secondary-results {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 15px;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 6px;
-            font-size: 0.85rem;
-        }
-        .sec-res-item span:last-child { font-family: monospace; font-weight: bold; color: white; margin-left: 5px; }
+        /* IFF SECTION */
+        .iff-section { background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; }
+        .btn-iff { background: transparent; border: 1px solid var(--success); color: var(--success); width: auto; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600; }
+        .btn-iff:hover { background: var(--success); color: white; }
 
-        .btn-primary, .btn-iff {
-            background: var(--accent);
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 4px;
-            width: 100%;
-            cursor: pointer;
-            font-weight: 600;
-            margin-top: 10px; 
-        }
-        .btn-iff { background: #334155; border: 1px solid var(--iff-color); color: var(--iff-color); margin-top: 0;}
-        .btn-iff:hover { background: var(--iff-color); color: white; }
-        .btn-primary:hover { background: var(--accent-hover); }
+        .sb-footer { padding: 15px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); flex-shrink: 0; }
+        .btn-report { background: #475569; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; }
+        .btn-report:hover { background: #64748b; }
 
-        /* --- STAGE --- */
-        .main-stage {
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            background: var(--bg-stage); 
-            color: #334155;
-            height: 100vh;
-            box-sizing: border-box;
-            /* FIXED: Overflow hidden prevents grid blowout */
-            overflow: hidden; 
-            min-width: 0;
-        }
+        /* --- STAGE & CHARTS --- */
+        .gutter { background: var(--bg-app); cursor: col-resize; transition: background 0.2s; z-index: 50; }
+        .gutter:hover, .gutter.active { background: var(--accent); }
 
-        .chart-wrapper {
-            flex-grow: 1;
-            background: var(--bg-card);
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            position: relative;
-            padding: 10px;
-            /* FIXED: These properties ensure the canvas shrinks with the window */
-            min-width: 0;
-            min-height: 0;
-            width: 100%;
-            overflow: hidden; 
-        }
-
-        .chart-controls {
-            position: absolute;
-            top: 20px;
-            left: 20px; 
-            z-index: 10;
-        }
-        .btn-sm {
-            background: rgba(255, 255, 255, 0.9);
-            border: 1px solid #cbd5e1;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            cursor: pointer;
-            color: #475569;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .btn-sm:hover { background: white; color: var(--accent); border-color: var(--accent); }
+        .stage { background: #f1f5f9; padding: 10px; display: flex; flex-direction: column; gap: 10px; height: 100vh; box-sizing: border-box; overflow: hidden; }
         
-        .empty-state {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            color: #64748b;
+        .chart-container { background: white; border-radius: 6px; border: 1px solid #cbd5e1; padding: 10px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .chart-top { flex: 6; }
+        .chart-bot-row { flex: 4; display: flex; gap: 10px; min-height: 0; }
+        .chart-sub { flex: 1; min-width: 0; }
+
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 0.8rem; font-weight: 700; color: #475569; }
+        .chart-box { flex: 1; position: relative; min-height: 0; width: 100%; cursor: crosshair; }
+
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(255,255,255,0.9); z-index: 10;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #64748b; pointer-events: none;
         }
 
-        .info-bar {
-            margin-top: 10px;
-            font-size: 0.85rem;
-            color: #64748b;
-            display: flex;
-            justify-content: space-between;
-        }
+        /* Clean Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-app); }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
     </style>
 </head>
 <body>
 
-    <div class="sidebar">
-        <div class="header">
-            <h2>QCM Analyst</h2>
-            <div>IFF & Z-Match</div>
+<div class="sidebar">
+    <div class="sb-header">
+        <h2>QCM Analyst</h2>
+        <small>version 01 feb 2026</small>
+    </div>
+
+    <div class="sb-content">
+        <div>
+            <button id="btnConnect" class="btn-connect" onclick="connectFile()">
+                <div id="btnLed" class="btn-led"></div>
+                <span id="btnText">📂 Open File</span>
+            </button>
         </div>
 
-        <label for="fileInput" class="file-upload-btn" id="fileBtn">
-            📂 Load Data File (.dat/.txt)
-        </label>
-        <input type="file" id="fileInput" accept=".dat, .txt, .csv">
-
-        <h3>Parameters</h3>
-        
-        <div class="input-row">
-            <div class="control-group">
-                <label>Crystal Freq (MHz)</label>
-                <input type="number" id="crystalFreqInput" value="6" step="0.1" oninput="triggerUpdate()">
+        <div>
+            <div class="section-title">Experimental Setup</div>
+            <div class="input-row">
+                <div class="input-group"><label>F₀ (MHz)</label><input type="number" id="pF0" value="6.0" step="0.1" oninput="recalc()"></div>
+                <div class="input-group"><label>Diam (mm)</label><input type="number" id="pDiam" value="10.0" step="0.1" oninput="recalc()"></div>
             </div>
-            <div class="control-group">
-                <label>Active Diameter (mm)</label>
-                <input type="number" id="crystalDiam" value="10" step="0.1" oninput="triggerUpdate()">
+            <div class="input-group">
+                <label>Material Preset</label>
+                <select id="pMat" onchange="applyPreset()">
+                    <option value="custom">User Defined</option>
+                    <option value="Au">Gold (Au)</option>
+                    <option value="Ag">Silver (Ag)</option>
+                    <option value="Cr">Chromium (Cr)</option>
+                    <option value="Ti" selected>Titanium (Ti)</option>
+                    <option value="Pt">Platinum (Pt)</option>
+                    <option value="Cu">Copper (Cu)</option>
+                    <option value="Al">Aluminum (Al)</option>
+                    <option value="SiO2">Silica (SiO2)</option>
+                </select>
             </div>
-        </div>
-
-        <div class="control-group" style="margin-bottom: 12px;">
-            <label>Material Preset</label>
-            <select id="materialSelect" onchange="handleMaterialChange()">
-                <option value="custom">User Defined</option>
-                <option value="Au">Gold (Au)</option>
-                <option value="Ag">Silver (Ag)</option>
-                <option value="Cr">Chromium (Cr)</option>
-                <option value="Ti" selected>Titanium (Ti)</option>
-                <option value="Pt">Platinum (Pt)</option>
-                <option value="Cu">Copper (Cu)</option>
-                <option value="Al">Aluminum (Al)</option>
-                <option value="SiO2">Silica (SiO2)</option>
-            </select>
-        </div>
-
-        <div class="input-row">
-            <div class="control-group">
-                <label>Density ($\rho$)</label>
-                <input type="number" id="density" value="4.506" step="0.001" oninput="triggerUpdate()">
-            </div>
-            <div class="control-group">
-                <label>Z-Factor</label>
-                <input type="number" id="zFactor" value="0.628" step="0.001" oninput="triggerUpdate()">
+            <div class="input-row" style="margin-top:10px;">
+                <div class="input-group"><label>ρ (g/cm³)</label><input type="number" id="pRho" value="4.506" oninput="recalc()"></div>
+                <div class="input-group"><label>Z-Factor</label><input type="number" id="pZ" value="0.628" oninput="recalc()"></div>
             </div>
         </div>
 
-        <h3>Analysis & Results</h3>
-
-        <div class="sim-result-row">
-            <div class="result-card">
-                <div class="res-label">Thickness</div>
-                <div id="resThickness" class="res-val" style="color: var(--accent);">0 nm</div>
-                <div id="methodUsed" class="res-sub">Sauerbrey</div>
-            </div>
-
-            <div class="result-card">
-                <div class="res-label">Dep. Rate ($v_e$)</div>
-                <div id="resRate" class="res-val" style="color: #fbbf24;">0.00</div>
-                <div class="res-sub">nm/s</div>
-            </div>
-        </div>
-
-        <div class="secondary-results">
-            <div class="sec-res-item">ΔF: <span id="resDeltaF">0 Hz</span></div>
-            <div class="sec-res-item">Ratio R(t): <span id="resRatio">0%</span></div>
-        </div>
-
-        <h3 class="iff-header">Ion Flux Fraction (IFF)</h3>
-        <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px;">
-            <div class="input-row" style="margin-bottom: 10px;">
-                <div class="control-group">
-                    <label>Reference Rate ($v_{tot}$)</label>
-                    <input type="number" id="refRateInput" value="0" step="0.01" oninput="updateIFF()">
+        <div>
+            <div class="section-title">Cursor Region Results</div>
+            <div class="results-panel">
+                <div>
+                    <div class="res-label">Thickness</div>
+                    <div id="outThick" class="res-val" style="color:var(--accent);">0.0</div>
+                    <div class="res-label">nanometers</div>
                 </div>
-                <button class="btn-iff" onclick="captureReference()">Set Current as Ref</button>
+                <div>
+                    <div class="res-label">Dep. Rate</div>
+                    <div id="outRate" class="res-val" style="color:var(--warn);">0.000</div>
+                    <div class="res-label">nm/sec</div>
+                </div>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.9rem; color: #94a3b8;">IFF Result:</span>
-                <span id="resIFF" style="font-family: monospace; font-size: 1.2rem; font-weight: bold; color: var(--iff-color);">-- %</span>
+            <div class="meta-info">
+                <div class="meta-row"><span>Range:</span><span id="outRange" class="val-highlight">0 - 0 s</span></div>
+                <div class="meta-row"><span>ΔF Total:</span><span id="outDf" class="val-highlight">0 Hz</span></div>
+                <div class="meta-row"><span>Method:</span><span id="outMethod" class="val-highlight">Sauerbrey</span></div>
             </div>
         </div>
 
-        <button class="btn-primary" onclick="generatePDF()">Download Report</button>
+        <div class="iff-section">
+            <div class="section-title" style="border:none; color:var(--success);">IFF Calculator</div>
+            <div class="input-group">
+                <label>Reference Rate ($v_{tot}$)</label>
+                <input type="number" id="iffRef" placeholder="Total Rate" style="margin-bottom:6px;">
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+                <div style="display:flex; gap:5px;">
+                    <button class="btn-iff" onclick="setRefRate()">Set Ref</button>
+                    <button class="btn-iff" onclick="calcIFF()">Calc %</button>
+                </div>
+                <div id="iffOut" style="font-family:monospace; font-weight:bold; color:var(--success);">-- %</div>
+            </div>
+        </div>
+
     </div>
 
-    <div class="gutter" id="resizeHandle"></div>
+    <div class="sb-footer">
+        <button class="btn-report" onclick="makePDF()">📄 Download Full Report</button>
+    </div>
+</div>
 
-    <div class="main-stage">
-        <div class="chart-wrapper">
-            <div class="chart-controls">
-                <button class="btn-sm" onclick="resetChartZoom()">Reset View</button>
-            </div>
-            <canvas id="qcmChart"></canvas>
-            <div id="emptyState" class="empty-state">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <path d="M17 8l-5-5-5 5"></path>
-                    <path d="M12 3v12"></path>
-                </svg>
-                <h3>Ready</h3>
-                <p>Load .dat file to begin analysis.</p>
-            </div>
+<div class="gutter" id="resizer"></div>
+
+<div class="stage">
+    
+    <div class="chart-container chart-top">
+        <div class="chart-header">
+            FREQUENCY SHIFT (Hz)
+            <button onclick="resetZoomAll()" style="font-size:0.7rem; cursor:pointer; background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 8px; border-radius:4px;">Reset Zoom</button>
         </div>
-        <div class="info-bar">
-            <span><strong>Controls:</strong> Drag to Move Cursors • <strong>Ctrl+Drag</strong> to Pan • Scroll to Zoom.</span>
-            <span id="cursorVals">Range: 0s - 0s</span>
+        <div class="chart-box">
+            <canvas id="chartF"></canvas>
+            <div id="overlayMsg" class="overlay">
+                <svg width="48" height="48" fill="none" stroke="#cbd5e1" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                <p style="margin-top:10px; font-weight:600;">Ready to Monitor</p>
+                <small>Click "OPEN LIVE FILE" in the sidebar</small>
+            </div>
         </div>
     </div>
+
+    <div class="chart-bot-row">
+        <div class="chart-container chart-sub">
+            <div class="chart-header" style="color:var(--chart-r);">R</div>
+            <div class="chart-box"><canvas id="chartR"></canvas></div>
+        </div>
+        <div class="chart-container chart-sub">
+            <div class="chart-header" style="color:var(--chart-p);">PHASE ANGLE (°)</div>
+            <div class="chart-box"><canvas id="chartP"></canvas></div>
+        </div>
+    </div>
+
+</div>
 
 <script>
-    const RHO_Q = 2.648;     
-    const MU_Q = 2.947e11;   
-    let livePollingInterval = null;
-    let lastFileContent = ""; // To prevent unnecessary chart refreshes
-    let selectedFile = null;  // Stores the file handle
-
-    const MATERIALS = {
+    /* --- CONFIGURATION --- */
+    const PRESETS = {
         'Au': { rho: 19.30, z: 0.381 },
         'Ag': { rho: 10.50, z: 0.529 },
-        'Cr': { rho: 7.19,  z: 0.305 },  
-        'Ti': { rho: 4.506, z: 0.628 },  
+        'Cr': { rho: 7.19,  z: 0.305 },
+        'Ti': { rho: 4.506, z: 0.628 },
         'Pt': { rho: 21.45, z: 0.245 },
         'Cu': { rho: 8.96,  z: 0.437 },
         'Al': { rho: 2.70,  z: 1.080 },
         'SiO2': { rho: 2.20, z: 1.000 }
     };
+    const CONST = { rho_q: 2.648, mu_q: 2.947e11 };
 
-    let chartInstance = null;
-    let mainDataset = []; 
-    let cursorStart = 0;
-    let cursorEnd = 0;
-    let isDragging = null;
-    let currentFileName = "Analysis";
-    let fUnload = 0; 
+    /* --- STATE --- */
+    let fileHandle = null;
+    let pollTimer = null;
+    let fileOffset = 0;
+    let D = { t:[], f:[], r:[], p:[] }; 
+    let baseF = null;
 
-    document.addEventListener('DOMContentLoaded', () => {
-        initChart();
-        handleMaterialChange(); 
+    let cF, cR, cP; 
+    let cursorStart = 0, cursorEnd = 0, isDragging = null;
+
+    /* --- INITIALIZATION --- */
+    window.onload = () => {
+        initCharts();
+        setupResizer();
+        setupCursors();
+    };
+
+    /* --- LIVE FILE ENGINE --- */
+    async function connectFile() {
+        if (!window.showOpenFilePicker) return alert("Browser not supported. Please use Chrome/Edge.");
+        try {
+            [fileHandle] = await window.showOpenFilePicker();
+            resetData();
+            
+            // UI Update: Button becomes the status indicator
+            const btn = document.getElementById('btnConnect');
+            const txt = document.getElementById('btnText');
+            btn.classList.add('active');
+            txt.innerText = fileHandle.name;
+            
+            document.getElementById('overlayMsg').style.display = 'none';
+            
+            if(pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(monitorFile, 1000); 
+            monitorFile();
+        } catch (err) { console.log("Cancelled"); }
+    }
+
+    async function monitorFile() {
+        if (!fileHandle) return;
+        const btn = document.getElementById('btnConnect'); // Get the button
+        const led = document.getElementById('btnLed');
+        
+        try {
+            // 1. Attempt to grab the file handle
+            const file = await fileHandle.getFile();
+            
+            // SUCCESS: Clear the "Red" error state immediately if it exists
+            btn.classList.remove('error'); 
+
+            // Case A: Experiment Restarted (File got smaller)
+            if (file.size < fileOffset) { 
+                resetData(); 
+                fileOffset = 0; 
+            }
+            
+            // Case B: New Data Found
+            if (file.size > fileOffset) {
+                led.classList.add('blink'); // Flash White
+                
+                // Read ONLY the new bytes (fast even for huge files)
+                const blob = file.slice(fileOffset, file.size);
+                const text = await blob.text();
+                
+                fileOffset = file.size; // Update pointer
+                parseData(text);
+                
+                setTimeout(() => led.classList.remove('blink'), 150);
+            }
+
+        } catch (err) { 
+            // FAILURE: LabVIEW is writing (Lock). Turn Red temporarily.
+            // The next loop (1s later) will clear this if the lock is gone.
+            console.warn("File busy/locked by acquisition software");
+            btn.classList.add('error'); 
+        }
+    }
+
+    function resetData() {
+        D = { t:[], f:[], r:[], p:[] };
+        baseF = null; fileOffset = 0;
+        cursorStart = 0; cursorEnd = 0;
+        [cF, cR, cP].forEach(c => { c.data.labels=[]; c.data.datasets[0].data=[]; c.update(); });
+    }
+
+    function parseData(chunk) {
+        const lines = chunk.split('\n');
+        let hasNew = false;
+        lines.forEach(line => {
+            line = line.trim();
+            if (!line || /^[a-zA-Z\[]/.test(line)) return;
+            const cols = line.split(/[\s,]+/).filter(x => x !== "");
+            if (cols.length >= 4) {
+                const t = parseFloat(cols[0]);
+                const f = parseFloat(cols[1]);
+                if (!isNaN(t) && !isNaN(f)) {
+                    D.t.push(t); D.f.push(f);
+                    D.r.push(parseFloat(cols[2])); D.p.push(parseFloat(cols[3]));
+                    hasNew = true;
+                }
+            }
+        });
+
+        if (hasNew) {
+            if (baseF === null) {
+                baseF = D.f[0];
+                cursorStart = D.t[0]; // Init cursors
+                cursorEnd = D.t[D.t.length-1];
+            }
+            if (cursorEnd === D.t[D.t.length-1 - (lines.length)]) cursorEnd = D.t[D.t.length-1];
+            updateGraphs();
+            recalc();
+        }
+    }
+
+
+    function initCharts() {
+    // 1. Define the base config (Cleaned up Pan settings)
+    const getCommonOptions = () => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        elements: { point: { radius: 0 }, line: { borderWidth: 1.5, tension: 0 } },
+        scales: {
+            x: { type: 'linear', grid: { display: false }, ticks: { color: '#475569', font: { size: 10 }, maxTicksLimit: 8 } },
+            y: { grid: { display: false }, ticks: { color: '#475569', font: { size: 10 } } }
+        },
+        plugins: {
+            legend: { display: false },
+            zoom: {
+                limits: {
+                    x: { min: 'original', max: 'original' },
+                    y: { min: 'original', max: 'original' }
+                },
+                pan: {
+                    enabled: true,
+                    mode: 'xy',
+                    modifierKey: null, // FIX: Allow panning without holding keys
+                    threshold: 5
+                },
+                zoom: {
+                    wheel: { enabled: true },
+                    pinch: { enabled: true },
+                    drag: { enabled: false },
+                    mode: 'xy'
+                }
+            }
+        }
     });
 
-    // Resize Logic
-    const gutter = document.getElementById('resizeHandle');
-    let isResizingSidebar = false;
+    // 2. Initialize Charts 
+   
+    // Frequency Chart (Custom logic for annotations)
+    const fOpts = getCommonOptions();
+    fOpts.plugins.annotation = {
+        annotations: {
+            line1: { type: 'line', scaleID: 'x', value: 0, borderColor: '#10b981', borderWidth: 2, label: { display: true, content: 'Start' } },
+            line2: { type: 'line', scaleID: 'x', value: 0, borderColor: '#ef4444', borderWidth: 2, label: { display: true, content: 'End' } }
+        }
+    };
+    
+    cF = new Chart(document.getElementById('chartF'), {
+        type: 'line',
+        data: { datasets: [{ data: [], borderColor: '#3b82f6' }] },
+        options: fOpts
+    });
 
-    gutter.addEventListener('mousedown', (e) => {
-        isResizingSidebar = true;
-        gutter.classList.add('active');
-        document.body.style.cursor = 'col-resize';
-        e.preventDefault(); 
+    // Resistance Chart
+    cR = new Chart(document.getElementById('chartR'), {
+        type: 'line',
+        data: { datasets: [{ data: [], borderColor: '#ec4899' }] },
+        options: getCommonOptions() // FIX: New object instance
+    });
+
+    // Phase Chart
+    cP = new Chart(document.getElementById('chartP'), {
+        type: 'line',
+        data: { datasets: [{ data: [], borderColor: '#f59e0b' }] },
+        options: getCommonOptions() // FIX: New object instance
+    });
+}
+
+function updateGraphs() {
+
+    const makeXY = (yArr) =>
+        D.t.map((t, i) => ({ x: t, y: yArr[i] }));
+
+    cF.data.datasets[0].data = makeXY(D.f);
+    cR.data.datasets[0].data = makeXY(D.r);
+    cP.data.datasets[0].data = makeXY(D.p);
+
+    // Update cursor lines
+    cF.options.plugins.annotation.annotations.line1.value = cursorStart;
+    cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
+
+    cF.update('none');
+    cR.update('none');
+    cP.update('none');
+}
+
+    function resetZoomAll() { cF.resetZoom(); cR.resetZoom(); cP.resetZoom(); }
+
+    function setupCursors() {
+    const canvas = document.getElementById('chartF');
+    
+    // 1. Visual Feedback (Cursor Icon)
+    canvas.addEventListener('mousemove', (e) => {
+        if (isDragging) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const xVal = cF.scales.x.getValueForPixel(e.clientX - rect.left);
+        const range = cF.scales.x.max - cF.scales.x.min;
+        
+        // Check distance to cursors (5% tolerance)
+        const hitStart = Math.abs(xVal - cursorStart) < range * 0.05;
+        const hitEnd = Math.abs(xVal - cursorEnd) < range * 0.05;
+
+        if (hitStart || hitEnd) {
+            canvas.style.cursor = 'ew-resize'; // Show "I can drag this line"
+        } else {
+            canvas.style.cursor = 'default';   // Show "I can pan the chart"
+        }
+    });
+    
+    // 2. Interaction Logic
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const xVal = cF.scales.x.getValueForPixel(e.clientX - rect.left);
+        const range = cF.scales.x.max - cF.scales.x.min;
+        
+        const hitStart = Math.abs(xVal - cursorStart) < range * 0.05;
+        const hitEnd = Math.abs(xVal - cursorEnd) < range * 0.05;
+        
+        // PRIORITY: If we hit a cursor, WE take the event.
+        if(hitStart || hitEnd) {
+            isDragging = hitStart ? 'start' : 'end';
+            e.preventDefault(); 
+            e.stopPropagation(); // <--- This stops the Chart Zoom plugin from seeing the click
+        }
+        // OTHERWISE: We do nothing. The event bubbles to Chart.js -> Hammer.js -> Pan works.
     });
 
     window.addEventListener('mousemove', (e) => {
-        if (!isResizingSidebar) return;
-        let newWidth = e.clientX;
-        if (newWidth < 300) newWidth = 300;
-        if (newWidth > 600) newWidth = 600;
-        document.body.style.gridTemplateColumns = `${newWidth}px 6px 1fr`;
-        if(chartInstance) chartInstance.resize();
+        if(!isDragging) return;
+        
+        // We are dragging a cursor, so kill all other interactions
+        e.preventDefault(); 
+        e.stopPropagation();
+        
+        const rect = canvas.getBoundingClientRect();
+        let val = cF.scales.x.getValueForPixel(e.clientX - rect.left);
+        
+        // Clamp to data bounds
+        if(D.t.length) val = Math.max(D.t[0], Math.min(D.t[D.t.length-1], val));
+        
+        if(isDragging==='start') cursorStart = val; else cursorEnd = val;
+        
+        // Update Visuals
+        cF.options.plugins.annotation.annotations.line1.value = cursorStart;
+        cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
+        cF.update('none'); // Efficient update
+        recalc();
     });
 
     window.addEventListener('mouseup', () => {
-        if(isResizingSidebar) {
-            isResizingSidebar = false;
-            gutter.classList.remove('active');
-            document.body.style.cursor = 'default';
-        }
+        isDragging = null;
     });
-
-    // FIXED: Listen to window resize to fix "going under" issues
-    window.addEventListener('resize', () => {
-        if(chartInstance) chartInstance.resize();
-    });
-
-    function triggerUpdate() {
-        updateCalculations();
-    }
-
-    function handleMaterialChange() {
-        const mat = document.getElementById('materialSelect').value;
-        const rhoInput = document.getElementById('density');
-        const zInput = document.getElementById('zFactor');
-
-        if (mat !== 'custom' && MATERIALS[mat]) {
-            rhoInput.value = MATERIALS[mat].rho;
-            zInput.value = MATERIALS[mat].z;
-        }
-        triggerUpdate();
-    }
-
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    selectedFile = file;
-    currentFileName = file.name;
-
-    // Clear any existing intervals if user switches files
-    if (livePollingInterval) clearInterval(livePollingInterval);
-
-    // Start the "Surveyor" loop (every 1 second)
-    livePollingInterval = setInterval(surveyFile, 1000);
-    
-    // Initial read
-    surveyFile();
-});
-
-function surveyFile() {
-    if (!selectedFile) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        const currentContent = event.target.result;
-        
-        // Only update if the file content has actually changed
-        if (currentContent !== lastFileContent) {
-            lastFileContent = currentContent;
-            parseFileContent(currentContent);
-            console.log("File updated: " + new Date().toLocaleTimeString());
-        }
-    };
-    reader.readAsText(selectedFile);
 }
 
-    function parseFileContent(text) {
-        const lines = text.split('\n');
-        const newData = [];
-        lines.forEach(line => {
-            line = line.trim();
-            if(!line) return;
-            const parts = line.split(/[\s,]+/).filter(p => p !== "");
-            if (parts.length >= 2) {
-                const t = parseFloat(parts[0]);
-                const f = parseFloat(parts[1]);
-                if (!isNaN(t) && !isNaN(f) && f > 100000) {
-                    newData.push({ x: t, y: f });
-                }
-            }
-        });
-
-        if (newData.length > 0) {
-            loadData(newData);
-        } else {
-            alert("No valid frequency data found (>100kHz).");
-        }
+    /* --- PHYSICS --- */
+    function getY(t) {
+        if(D.t.length===0) return 0;
+        let i = 0; while(i < D.t.length && D.t[i] < t) i++;
+        if(i===0) return D.f[0];
+        if(i>=D.t.length) return D.f[D.t.length-1];
+        const t1 = D.t[i-1], t2 = D.t[i];
+        const f1 = D.f[i-1], f2 = D.f[i];
+        return f1 + (t-t1)*(f2-f1)/(t2-t1);
     }
 
-    function loadData(data) {
-    const isFirstLoad = mainDataset.length === 0;
-    mainDataset = data;
-    fUnload = mainDataset[0].y; 
+    function recalc() {
+        if (D.t.length === 0) return;
 
-    if (isFirstLoad && mainDataset.length > 1) {
-        const tMin = mainDataset[0].x;
-        const tMax = mainDataset[mainDataset.length - 1].x;
-        cursorStart = tMin;
-        cursorEnd = tMax;
-        refreshChart();
-        updateChartCursors();
-    } else {
-        // Just update data without moving cursors/zoom
-        refreshChart();
-    }
-    
-    triggerUpdate();
-}
+        const f0 = parseFloat(document.getElementById('pF0').value) * 1e6;
+        const diam = parseFloat(document.getElementById('pDiam').value);
+        const rho = parseFloat(document.getElementById('pRho').value);
+        const zfac = parseFloat(document.getElementById('pZ').value);
+        const area = Math.PI * Math.pow((diam/10)/2, 2);
 
-    function refreshChart() {
-        chartInstance.data.datasets[0].data = mainDataset;
-        document.getElementById('emptyState').style.display = mainDataset.length > 0 ? 'none' : 'block';
-        chartInstance.update('none'); 
-        if(chartInstance.scales.x.min === undefined && mainDataset.length > 0) {
-             chartInstance.resetZoom();
-        }
-    }
-
-    function resetChartZoom() {
-        if(chartInstance) chartInstance.resetZoom();
-    }
-
-    function initChart() {
-        const ctx = document.getElementById('qcmChart').getContext('2d');
-        chartInstance = new Chart(ctx, {
-            type: 'line',
-            data: { 
-                datasets: [
-                    { 
-                        label: 'Experimental f(t)', 
-                        data: [], 
-                        borderColor: '#3b82f6', 
-                        borderWidth: 1.5, 
-                        pointRadius: 0, 
-                        tension: 0.1,
-                        order: 2 
-                    }
-                ] 
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: { mode: 'nearest', intersect: false },
-                scales: {
-                    x: { type: 'linear', title: { display: true, text: 'Time (s)' }, grid: { display: false } },
-                    y: { beginAtZero: false, title: { display: true, text: 'Frequency (Hz)' } }
-                },
-                plugins: {
-                    legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 12 } },
-                    zoom: { 
-                        // FIXED: Added modifierKey to prevent conflict with cursor dragging
-                        pan: { enabled: true, mode: 'xy', modifierKey: 'ctrl' }, 
-                        zoom: { wheel: { enabled: true }, mode: 'xy' } 
-                    },
-                    annotation: {
-                        annotations: {
-                            lineStart: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'Start' } },
-                            lineEnd: { type: 'line', xMin: 0, xMax: 0, borderColor: '#475569', borderWidth: 2, label: { display: true, content: 'End', position: 'end' } }
-                        }
-                    }
-                }
-            }
-        });
-        setupDragInteractions();
-    }
-
-    function setupDragInteractions() {
-        const canvas = document.getElementById('qcmChart');
-        
-        canvas.addEventListener('mousedown', (e) => {
-            // FIXED: Ignore drag if Ctrl is pressed (let Zoom plugin handle pan)
-            if(e.ctrlKey) return; 
-
-            if(mainDataset.length === 0) return;
-            const xVal = chartInstance.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left);
-            const range = chartInstance.scales.x.max - chartInstance.scales.x.min;
-            const threshold = range * 0.05;
-            if (Math.abs(xVal - cursorStart) < threshold) isDragging = 'start';
-            else if (Math.abs(xVal - cursorEnd) < threshold) isDragging = 'end';
-        });
-
-        window.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            let val = chartInstance.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left);
-            
-            if (mainDataset.length > 0) {
-                const tMin = mainDataset[0].x;
-                const tMax = mainDataset[mainDataset.length-1].x;
-                val = Math.max(tMin, Math.min(tMax, val));
-            }
-
-            if (isDragging === 'start') {
-                if (val >= cursorEnd) val = cursorEnd - 0.1; 
-                cursorStart = val;
-            } else {
-                if (val <= cursorStart) val = cursorStart + 0.1; 
-                cursorEnd = val;
-            }
-
-            updateChartCursors();
-            triggerUpdate(); 
-        });
-        window.addEventListener('mouseup', () => isDragging = null);
-    }
-
-    function updateChartCursors() {
-        const pl = chartInstance.options.plugins.annotation.annotations;
-        pl.lineStart.xMin = pl.lineStart.xMax = cursorStart;
-        pl.lineEnd.xMin = pl.lineEnd.xMax = cursorEnd;
-        chartInstance.update('none');
-        document.getElementById('cursorVals').innerText = `Range: ${cursorStart.toFixed(1)}s - ${cursorEnd.toFixed(1)}s`;
-    }
-
-    function getInterpolatedFreq(timeVal) {
-        if (mainDataset.length === 0) return 0;
-        const nearest = mainDataset.reduce((prev, curr) => Math.abs(curr.x - timeVal) < Math.abs(prev.x - timeVal) ? curr : prev);
-        return nearest.y;
-    }
-
-    function updateCalculations() {
-        if (mainDataset.length === 0) return;
-
-        const fStart = getInterpolatedFreq(cursorStart);
-        const fEnd = getInterpolatedFreq(cursorEnd); 
-
-        const nominalF0 = parseFloat(document.getElementById('crystalFreqInput').value) * 1e6;
-        const diam = parseFloat(document.getElementById('crystalDiam').value);
-        let rho_film = parseFloat(document.getElementById('density').value);
-        const z_film_ratio = parseFloat(document.getElementById('zFactor').value);
-        
-        if (rho_film <= 0 || isNaN(rho_film)) rho_film = 1;
-
-        const area = Math.PI * Math.pow((diam/10)/2, 2); 
-
-        const ratio = Math.abs((fEnd - fUnload) / fUnload);
-        const deltaF = fEnd - fUnload; 
-
-        let mass = 0, thickness = 0, method = "Sauerbrey";
-
-        if(nominalF0 > 0 && area > 0) {
-            
-            if (ratio >= 0.02) {
-                method = "Z-Match";
-                // FIXED: Added division by 2 to term1. 
-                // PDF says Nq*rho_q, which is sqrt(rho_q*mu_q)/2.
-                const term1 = Math.sqrt(RHO_Q * MU_Q) / (2 * Math.PI * fEnd * z_film_ratio);
-                const term2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (fUnload - fEnd) / fUnload ));
-                
-                const arealMass = term1 * term2; 
-                mass = arealMass * area; 
-                thickness = arealMass / rho_film; 
-
-            } else {
-                method = "Sauerbrey";
-                const C = (area * Math.sqrt(RHO_Q * MU_Q)) / (2 * Math.pow(nominalF0, 2));
-                mass = Math.abs(deltaF) * C; 
-                thickness = mass / (area * rho_film); 
-            }
-        }
-        
-        const getThickAtF = (f) => {
-            const locDelta = f - fUnload;
-            const locRatio = Math.abs(locDelta / fUnload);
-            if(locRatio >= 0.02) {
-                 // FIXED: Added division by 2 here as well for consistency
-                 const t1 = Math.sqrt(RHO_Q * MU_Q) / (2 * Math.PI * f * z_film_ratio);
-                 const t2 = Math.atan(z_film_ratio * Math.tan( Math.PI * (fUnload - f) / fUnload ));
-                 return (t1 * t2) / rho_film;
-            } else {
-                 const C = (Math.sqrt(RHO_Q * MU_Q)) / (2 * Math.pow(nominalF0, 2)); 
-                 return (Math.abs(locDelta) * C) / rho_film;
-            }
-        };
-
-        const thickStart = getThickAtF(fStart);
-        const thickEnd = getThickAtF(fEnd);
+        const fStart = getY(cursorStart);
+        const fEnd = getY(cursorEnd);
         const dt = cursorEnd - cursorStart;
         
-        let rate = 0;
-        if(dt > 0.1) {
-            rate = (thickEnd - thickStart) / dt; 
+        const calcThick = (fx) => {
+            const df = fx - baseF;
+            const ratio = Math.abs(df / baseF);
+            let mass = 0;
+            if (ratio < 0.02) {
+                const C = Math.sqrt(CONST.rho_q * CONST.mu_q) / (2 * f0 * f0);
+                mass = Math.abs(df) * C * area; 
+            } else {
+                const t1 = Math.sqrt(CONST.rho_q * CONST.mu_q) / (2 * Math.PI * fx * zfac);
+                const t2 = Math.atan(zfac * Math.tan(Math.PI * (baseF - fx) / baseF));
+                mass = t1 * t2 * area;
+            }
+            return (mass / (rho * area)) * 1e7; 
         }
 
-        document.getElementById('resDeltaF').innerText = deltaF.toFixed(1) + " Hz";
-        document.getElementById('resRatio').innerText = (ratio * 100).toFixed(3) + "%";
-        document.getElementById('resThickness').innerText = (thickEnd * 1e7).toFixed(2) + " nm";
-        
-        const rateNm = rate * 1e7;
-        document.getElementById('resRate').innerText = rateNm.toFixed(3);
+        const thEnd = calcThick(fEnd);
+        const thStart = calcThick(fStart);
+        const rate = dt > 0.5 ? (Math.abs(thEnd - thStart) / dt) : 0;
 
-        const methodEl = document.getElementById('methodUsed');
-        methodEl.innerText = method; 
-        methodEl.style.color = method === "Z-Match" ? "#ec4899" : "#3b82f6";
-
-        updateIFF(rateNm);
+        document.getElementById('outThick').innerText = thEnd.toFixed(1);
+        document.getElementById('outRate').innerText = rate.toFixed(3);
+        document.getElementById('outDf').innerText = (fEnd - baseF).toFixed(0) + " Hz";
+        document.getElementById('outRange').innerText = `${cursorStart.toFixed(0)} - ${cursorEnd.toFixed(0)} s`;
     }
 
-    function captureReference() {
-        const currentRate = parseFloat(document.getElementById('resRate').innerText);
-        document.getElementById('refRateInput').value = currentRate;
-        updateIFF();
+    /* --- IFF --- */
+    function setRefRate() { document.getElementById('iffRef').value = document.getElementById('outRate').innerText; }
+    function calcIFF() {
+        const vTot = parseFloat(document.getElementById('iffRef').value);
+        const vNeut = parseFloat(document.getElementById('outRate').innerText);
+        if(!vTot) return;
+        const iff = 1 - (vNeut / vTot);
+        document.getElementById('iffOut').innerText = (iff*100).toFixed(1) + " %";
     }
 
-    function updateIFF(currentRateNm = null) {
-        const v_tot = parseFloat(document.getElementById('refRateInput').value);
-        const v_neutre = currentRateNm !== null ? currentRateNm : parseFloat(document.getElementById('resRate').innerText);
-        const iffEl = document.getElementById('resIFF');
-        
-        if(v_tot === 0) {
-            iffEl.innerText = "-- %";
-            return;
-        }
-
-        const iff = 1 - (v_neutre / v_tot);
-        const iffPercent = iff * 100;
-        
-        iffEl.innerText = iffPercent.toFixed(1) + " %";
+    /* --- UTILS --- */
+    function applyPreset() {
+        const m = PRESETS[document.getElementById('pMat').value];
+        if(m) { document.getElementById('pRho').value = m.r; document.getElementById('pZ').value = m.z; recalc(); }
+    }
+    function setupResizer() {
+        const g = document.getElementById('resizer');
+        let d = false;
+        g.onmousedown = () => { d=true; document.body.style.cursor='col-resize'; };
+        window.onmousemove = (e) => {
+            if(!d) return;
+            const w = Math.max(300, Math.min(500, e.clientX));
+            document.body.style.gridTemplateColumns = `${w}px 4px 1fr`;
+            [cF, cR, cP].forEach(c => c.resize());
+        };
+        window.onmouseup = () => { d=false; document.body.style.cursor='default'; };
     }
 
-    function generatePDF() {
-        if(mainDataset.length === 0) return alert("No data to report.");
+    function makePDF() {
+        if (D.t.length === 0) return alert("No data.");
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        const primaryColor = [59, 130, 246];
-
-        doc.setFontSize(20);
-        doc.setTextColor(...primaryColor);
-        doc.text("QCM Analysis Report (IFF Edition)", 14, 20);
+        doc.setFontSize(22); doc.setTextColor(59, 130, 246); doc.text("QCM Laboratory Report", 15, 20);
+        doc.setFontSize(10); doc.setTextColor(80);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 15, 28);
+        doc.text(`Filename: ${fileHandle ? fileHandle.name : "N/A"}`, 15, 33);
         
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`File: ${currentFileName}`, 14, 28);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 33);
+        doc.setLineWidth(0.5); doc.line(15, 42, 195, 42);
+        doc.setFontSize(14); doc.setTextColor(0); doc.text("Experimental Parameters", 15, 50);
+        doc.setFontSize(11);
+        doc.text(`Crystal F0: ${document.getElementById('pF0').value} MHz  |  Diameter: ${document.getElementById('pDiam').value} mm`, 15, 58);
+        doc.text(`Material: ${document.getElementById('pMat').value}  |  Density: ${document.getElementById('pRho').value}`, 15, 64);
 
-        let y = 50;
-        doc.setFontSize(12);
-        doc.setTextColor(0);
-        doc.setFont(undefined, 'bold');
-        doc.text("Parameters", 14, y);
-        y += 7;
+        doc.setFontSize(14); doc.text("Analysis Results", 15, 75); doc.setFontSize(11);
+        doc.text(`Window: ${document.getElementById('outRange').innerText}`, 15, 83);
+        doc.text(`Thickness: ${document.getElementById('outThick').innerText} nm`, 15, 89);
+        doc.text(`Rate: ${document.getElementById('outRate').innerText} nm/s`, 15, 95);
+        doc.text(`Freq Shift: ${document.getElementById('outDf').innerText}`, 100, 89);
+        doc.text(`IFF Result: ${document.getElementById('iffOut').innerText}`, 100, 95);
 
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(10);
-        
-        const freq = document.getElementById('crystalFreqInput').value;
-        const diam = document.getElementById('crystalDiam').value;
-        const mat = document.getElementById('materialSelect').options[document.getElementById('materialSelect').selectedIndex].text;
-        const rho = document.getElementById('density').value;
-        const z = document.getElementById('zFactor').value;
-
-        doc.text(`• Crystal: ${freq} MHz, ${diam} mm`, 20, y);
-        y += 5;
-        doc.text(`• Material: ${mat} (Density: ${rho} g/cm³, Z-Factor: ${z})`, 20, y);
-        y += 10;
-
-        doc.setFontSize(12);
-        doc.setFont(undefined, 'bold');
-        doc.text("Analysis Window Results", 14, y);
-        y += 7;
-
-        doc.setFont(undefined, 'normal');
-        doc.setFontSize(10);
-        doc.text(`Method Used: ${document.getElementById('methodUsed').innerText} (Ratio: ${document.getElementById('resRatio').innerText})`, 20, y);
-        y+=5;
-        doc.text(`Frequency Shift (End): ${document.getElementById('resDeltaF').innerText}`, 20, y);
-        y+=5;
-        
-        doc.setFont(undefined, 'bold');
-        doc.text(`Total Thickness: ${document.getElementById('resThickness').innerText}`, 20, y);
-        y+=5;
-        doc.text(`Deposition Rate: ${document.getElementById('resRate').innerText} nm/s`, 20, y);
-        y+=10;
-
-        doc.setTextColor(...primaryColor);
-        doc.text(`IFF Result: ${document.getElementById('resIFF').innerText}`, 20, y);
-        doc.text(`(Ref Rate: ${document.getElementById('refRateInput').value} nm/s)`, 60, y);
-        
-        doc.setTextColor(0);
-        doc.setFont(undefined, 'normal');
-
-        const chartImg = chartInstance.toBase64Image();
-        doc.addImage(chartImg, 'PNG', 14, 110, 180, 100);
-        doc.save(`QCM_Report_${Date.now()}.pdf`);
+        let y = 105;
+        const addPlot = (id, title) => {
+            doc.setFontSize(12); doc.setTextColor(59, 130, 246); doc.text(title, 15, y);
+            const img = document.getElementById(id).toDataURL('image/png', 1.0);
+            doc.addImage(img, 'PNG', 15, y+2, 180, 70); y += 80;
+        };
+        addPlot('chartF', 'Frequency Evolution');
+        if (y > 200) { doc.addPage(); y=20; } addPlot('chartR', 'R');
+        if (y > 200) { doc.addPage(); y=20; } addPlot('chartP', 'Phase Angle');
+        doc.save("QCM_Lab_Report.pdf");
     }
 </script>
 </body>
