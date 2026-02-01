@@ -346,6 +346,9 @@
 <script>
     const RHO_Q = 2.648;     
     const MU_Q = 2.947e11;   
+    let livePollingInterval = null;
+    let lastFileContent = ""; // To prevent unnecessary chart refreshes
+    let selectedFile = null;  // Stores the file handle
 
     const MATERIALS = {
         'Au': { rho: 19.30, z: 0.381 },
@@ -421,13 +424,38 @@
     }
 
     document.getElementById('fileInput').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        currentFileName = file.name;
-        const reader = new FileReader();
-        reader.onload = (event) => parseFileContent(event.target.result);
-        reader.readAsText(file);
-    });
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    selectedFile = file;
+    currentFileName = file.name;
+
+    // Clear any existing intervals if user switches files
+    if (livePollingInterval) clearInterval(livePollingInterval);
+
+    // Start the "Surveyor" loop (every 1 second)
+    livePollingInterval = setInterval(surveyFile, 1000);
+    
+    // Initial read
+    surveyFile();
+});
+
+function surveyFile() {
+    if (!selectedFile) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const currentContent = event.target.result;
+        
+        // Only update if the file content has actually changed
+        if (currentContent !== lastFileContent) {
+            lastFileContent = currentContent;
+            parseFileContent(currentContent);
+            console.log("File updated: " + new Date().toLocaleTimeString());
+        }
+    };
+    reader.readAsText(selectedFile);
+}
 
     function parseFileContent(text) {
         const lines = text.split('\n');
@@ -453,20 +481,24 @@
     }
 
     function loadData(data) {
-        mainDataset = data;
-        fUnload = mainDataset[0].y; 
+    const isFirstLoad = mainDataset.length === 0;
+    mainDataset = data;
+    fUnload = mainDataset[0].y; 
 
-        if (mainDataset.length > 1) {
-            const tMin = mainDataset[0].x;
-            const tMax = mainDataset[mainDataset.length - 1].x;
-            cursorStart = tMin + (tMax - tMin) * 0.1;
-            cursorEnd = tMax - (tMax - tMin) * 0.1;
-        }
-        
+    if (isFirstLoad && mainDataset.length > 1) {
+        const tMin = mainDataset[0].x;
+        const tMax = mainDataset[mainDataset.length - 1].x;
+        cursorStart = tMin;
+        cursorEnd = tMax;
         refreshChart();
         updateChartCursors();
-        triggerUpdate();
+    } else {
+        // Just update data without moving cursors/zoom
+        refreshChart();
     }
+    
+    triggerUpdate();
+}
 
     function refreshChart() {
         chartInstance.data.datasets[0].data = mainDataset;
