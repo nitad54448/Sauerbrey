@@ -130,7 +130,7 @@ $$Q = \pi \cdot f_0 \cdot \tau$$
 $$\Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
 ### B. The P-Gain to Q Relationship (Calibration)
-The relationship between the PID 3 P-gain ($K_p$) and the system damping is linear. Do not fit Q vs P; fit $\Gamma$ vs P.
+The relationship between the PID 3 P-gain ($K_p$) and the system damping is linear; fit $\Gamma$ vs P.
 
 **Linear Model:**
 $$\Gamma(K_p) = \Gamma_{native} - \alpha \cdot K_p$$
@@ -145,26 +145,26 @@ $$K_{p,target} = \frac{\Gamma_{native} - \frac{\pi \cdot f_0}{Q_{target}}}{\alph
 The AGC is critical because Q-control modifies the system gain.
 * **Without AGC:** Increasing Q by 10x increases Amplitude by 10x (until saturation).
 * **With AGC:** The AGC reduces the Drive Voltage ($V_{drive}$) to keep Amplitude ($A$) constant.
-* **Tuning:** Use a robust **Integral (I)** term. The **Proportional (P)** term should be positive but small to avoiding ringing in the amplitude domain.
+* **Tuning:** Use a big **Integral (I)** term. The **Proportional (P)** term should be positive but small to avoiding ringing in the amplitude domain.
 
 ### D. Safety: The Lasing Threshold
 If $K_p$ is set too high (positive feedback), the total damping $\Gamma$ becomes negative.
 * **Condition:** $\Gamma \le 0$
 * **Result:** Exponential amplitude growth (Lasing).
-* **Prevention:** In your software, calculate the "Lasing P-gain" ($K_{p,max} = \Gamma_{native} / \alpha$) and set a software limit at 90% of this value.
+* **Prevention:** Calculate the "Lasing P-gain" ($K_{p,max} = \Gamma_{native} / \alpha$) and set a software limit at about 80-90% of this value.
 
 ### E. PID Polarity & Phase Slope Handling (For "Strange" Resonators)
 
-Some resonators exhibit an **inverted phase slope** (positive slope through resonance) due to capacitive feedthrough. Q-control does **not** fix this physics; it simply steepens the slope.
+Some resonators exhibit an **inverted phase slope** (positive slope through resonance) due to capacitive feedthrough. Q-control does **not** fix this; it simply changes the slope.
 
 **1. Polarity Rule:**
 * You must detect the slope direction ($S = d\Theta/df$) during Phase B.
 * **Normal ($S < 0$):** Use **Negative** P and I gains for PID 1.
 * **Inverted ($S > 0$):** Use **Positive** P and I gains for PID 1.
-* *Note:* The sign of P and I must always match each other.
+* *Note:* The sign of P and I must match each other.
 
 **2. Magnitude Scaling:**
 * As Q increases, the phase slope becomes steeper. A steeper slope increases the loop gain of the PLL.
-* To prevent oscillation, you must **reduce** the PID 1 gains proportionally.
+* To prevent oscillation, **reduce** the PID 1 gains proportionally.
 * **Formula:**
     $$P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$$
