@@ -9,7 +9,7 @@
 
 ## 1. System Topology & Demodulator Mapping
 
-To ensure stability and mnemonic clarity, we map the PIDs directly to their corresponding Demodulators.
+We map the PIDs directly to their corresponding Demodulators.
 
 | Index | Function | Role | Critical Setting |
 | :--- | :--- | :--- | :--- |
@@ -30,13 +30,13 @@ To ensure stability and mnemonic clarity, we map the PIDs directly to their corr
 | **Q-Feedback** | `Signal Output 2` | Feedback force. Controlled by Q-PID (PID 3). |
 | **Input Signal** | `Signal Input 1` | Resonator response. Feeds all Demods. |
 
-> **Critical Hardware Step:** You must physically sum `Signal Output 1` and `Signal Output 2` (using a BNC T-piece or combiner) before connecting to the resonator drive pin.
+> **Critical Hardware Step:** Physically sum `Signal Output 1` and `Signal Output 2` (using a BNC T-piece or combiner) before connecting to the resonator drive pin.
 
 ---
 
 ## 3. Controller Configuration Reference
 
-Use this table to configure the PID modules in LabVIEW. Note that **PID 2 is skipped**.
+Configure the PID modules in LabVIEW (or other APIs). Note that **PID 2 is skipped**.
 
 | Parameter | **PID 1 (PLL)** | **PID 3 (Q-Control)** | **PID 4 (AGC)** |
 | :--- | :--- | :--- | :--- |
@@ -45,7 +45,7 @@ Use this table to configure the PID modules in LabVIEW. Note that **PID 2 is ski
 | **Setpoint** | **0.0 deg** | **0.0 V** | **Target Amplitude** (e.g. 0.1 V) |
 | **Output Channel** | `Oscillator 1 Freq` | `Signal Output 2 Amp` | `Signal Output 1 Amp` |
 | **Output Phase** | N/A | **90.0°** (Crucial) | **0.0°** |
-| **P-Gain (Kp)** | Tuned (Negative) | **Variable** (Scan this) | **Positive** |
+| **P-Gain (Kp)** | **Adaptive** (See Section 5.E) | **Variable** (Scan this) | **Positive** |
 | **I-Gain (Ki)** | Required | **Zero** | **Positive** (Slow) |
 | **Output Range** | $\pm$ 10 kHz | $\pm$ 0.5 V (Safety Limit) | 0.0 V to 1.0 V |
 
@@ -69,24 +69,28 @@ Use this table to configure the PID modules in LabVIEW. Note that **PID 2 is ski
 5.  **Disable PIDs:** Set `pids/0/enable` (PID1), `pids/2/enable` (PID3), and `pids/3/enable` (PID4) -> `0`.
 
 ### Phase B: Lock Frequency (PID 1)
-6.  **Setup PID 1 (PLL):**
+6.  **Characterize Phase Slope:**
+    * During sweep, calculate slope $S = d\Theta / df$ at resonance.
+    * If $S < 0$ (Normal): Use **Negative** P/I gains.
+    * If $S > 0$ (Inverted): Use **Positive** P/I gains (invert the Advisor suggested values)
+7.  **Setup PID 1 (PLL):**
     * Input=`Demod 1 Phase`, Output=`Osc 1 Freq`.
-    * Tuned P/I parameters.
-7.  **Engage:** `pids/0/enable` -> `1`.
-8.  **Wait Loop:** Read `pids/0/error` until locked.
+    * Set P/I based on slope direction.
+8.  **Engage:** `pids/0/enable` -> `1`.
+9.  **Wait Loop:** Read `pids/0/error` until locked.
 
 ### Phase C: Q-Calibration Loop (Scanning PID 3)
 *Using Demod 2 for Measurement, Demod 3 for Control.*
 
-9.  **Setup PID 3 (Q-Control):**
+10. **Setup PID 3 (Q-Control):**
     * Node Path: `pids/2/...` (Index 2 = PID 3).
     * Input=`Demod 3 R`, Output=`Sig Out 2 Amp`, Setpoint=`0`.
     * **Important:** P-Gain starts at 0.
-10. **Configure LabOne DAQ Module:**
+11. **Configure LabOne DAQ Module:**
     * *Trigger Source:* `SigOut 1 Enable` (Hardware Trigger).
     * *Signal Path:* `demods/1/sample.r` (Demod 2 R).
     * *Edge:* Falling (Trigger when drive turns off).
-11. **Scan Loop (Iterate P-Gain):**
+12. **Scan Loop (Iterate P-Gain):**
     * **Update P:** `pids/2/kp` -> `P_Value`. `pids/2/enable` -> `1`.
     * **Wait:** 500ms (Settle).
     * **Arm DAQ:** Execute `DAQ.Execute(Record)`.
@@ -97,13 +101,14 @@ Use this table to configure the PID modules in LabVIEW. Note that **PID 2 is ski
     * **Compute:** Fit exponential to Demod 2 data (See Section 5).
 
 ### Phase D: Engage Steady State
-12. **Set Optimal Q:**
+13. **Set Optimal Q:**
     * `pids/2/kp` -> Calculated Target P (See Section 5).
     * `pids/2/enable` -> `1`.
-13. **Setup PID 4 (AGC):**
+    * **Update PID 1 Gain:** Scale PLL gains by $Q_{native}/Q_{target}$ (See Section 5.E).
+14. **Setup PID 4 (AGC):**
     * Node Path: `pids/3/...` (Index 3 = PID 4).
     * Input=`Demod 4 R`, Output=`Sig Out 1 Amp`, Setpoint=`Target Amp`.
-14. **Engage:** `pids/3/enable` -> `1`.
+15. **Engage:** `pids/3/enable` -> `1`.
 
 ---
 
@@ -147,3 +152,19 @@ If $K_p$ is set too high (positive feedback), the total damping $\Gamma$ becomes
 * **Condition:** $\Gamma \le 0$
 * **Result:** Exponential amplitude growth (Lasing).
 * **Prevention:** In your software, calculate the "Lasing P-gain" ($K_{p,max} = \Gamma_{native} / \alpha$) and set a software limit at 90% of this value.
+
+### E. PID Polarity & Phase Slope Handling (For "Strange" Resonators)
+
+Some resonators exhibit an **inverted phase slope** (positive slope through resonance) due to capacitive feedthrough. Q-control does **not** fix this physics; it simply steepens the slope.
+
+**1. Polarity Rule:**
+* You must detect the slope direction ($S = d\Theta/df$) during Phase B.
+* **Normal ($S < 0$):** Use **Negative** P and I gains for PID 1.
+* **Inverted ($S > 0$):** Use **Positive** P and I gains for PID 1.
+* *Note:* The sign of P and I must always match each other.
+
+**2. Magnitude Scaling:**
+* As Q increases, the phase slope becomes steeper. A steeper slope increases the loop gain of the PLL.
+* To prevent oscillation, you must **reduce** the PID 1 gains proportionally.
+* **Formula:**
+    $$P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$$
