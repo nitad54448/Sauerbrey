@@ -355,31 +355,63 @@
         [cF, cR, cP].forEach(c => { c.data.labels=[]; c.data.datasets[0].data=[]; c.update(); });
     }
 
+
     function parseData(chunk) {
         const lines = chunk.split('\n');
-        let hasNew = false;
+        let newPointsCount = 0; // Track valid data added to fix auto-scroll logic
+
         lines.forEach(line => {
-            line = line.trim();
-            if (!line || /^[a-zA-Z\[]/.test(line)) return;
-            const cols = line.split(/[\s,]+/).filter(x => x !== "");
+            // 1. Clean whitespace
+            let rawLine = line.trim();
+            if (!rawLine) return;
+
+            // 2. Filter Non-Data Lines
+            // Ignores lines starting with '*', '[', '-', or letters (Header text)
+            // Also explicitly skips lines containing slashes (dates) to prevent false parsing
+            if (/^[\*\-\[a-zA-Z]/.test(rawLine) || rawLine.includes('/')) return;
+
+            // 3. Normalize Decimal Separator
+            // Replace all commas with dots to make it valid for JavaScript parseFloat
+            // (e.g. "4,29" becomes "4.29")
+            const normalizedLine = rawLine.replace(/,/g, '.');
+
+            // 4. Tokenize
+            // Split by whitespace (tabs or spaces)
+            const cols = normalizedLine.split(/\s+/).filter(x => x !== "");
+
+            // 5. Parse Data
             if (cols.length >= 4) {
                 const t = parseFloat(cols[0]);
                 const f = parseFloat(cols[1]);
+                
+                // Ensure we have valid numbers
                 if (!isNaN(t) && !isNaN(f)) {
-                    D.t.push(t); D.f.push(f);
-                    D.r.push(parseFloat(cols[2])); D.p.push(parseFloat(cols[3]));
-                    hasNew = true;
+                    D.t.push(t); 
+                    D.f.push(f);
+                    D.r.push(parseFloat(cols[2])); 
+                    D.p.push(parseFloat(cols[3]));
+                    
+                    newPointsCount++;
                 }
             }
         });
 
-        if (hasNew) {
+        if (newPointsCount > 0) {
+            // Initialization for the very first data chunk
             if (baseF === null) {
                 baseF = D.f[0];
-                cursorStart = D.t[0]; // Init cursors
-                cursorEnd = D.t[D.t.length-1];
+                cursorStart = D.t[0];
+                cursorEnd = D.t[D.t.length - 1];
             }
-            if (cursorEnd === D.t[D.t.length-1 - (lines.length)]) cursorEnd = D.t[D.t.length-1];
+            
+            // Auto-Scroll Logic:
+            // If cursor was at the previous end (monitoring live), move it to the new end.
+            // We use 'newPointsCount' instead of 'lines.length' to account for skipped comment lines.
+            const prevEndIndex = D.t.length - 1 - newPointsCount;
+            if (prevEndIndex >= 0 && cursorEnd === D.t[prevEndIndex]) {
+                cursorEnd = D.t[D.t.length - 1];
+            }
+
             updateGraphs();
             recalc();
         }
@@ -616,29 +648,41 @@ function updateGraphs() {
         window.onmouseup = () => { d=false; document.body.style.cursor='default'; };
     }
 
+
     function makePDF() {
         if (D.t.length === 0) return alert("No data.");
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.setFontSize(22); doc.setTextColor(59, 130, 246); doc.text("QCM Laboratory Report", 15, 20);
-        doc.setFontSize(10); doc.setTextColor(80);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 15, 28);
-        doc.text(`Filename: ${fileHandle ? fileHandle.name : "N/A"}`, 15, 33);
         
-        doc.setLineWidth(0.5); doc.line(15, 42, 195, 42);
-        doc.setFontSize(14); doc.setTextColor(0); doc.text("Experimental Parameters", 15, 50);
+        // Generate timestamp for filename
+        const now = new Date();
+        const dateStr = now.toISOString().replace(/T/, '_').replace(/:/g, '-').slice(0, 16);
+
+        doc.setFontSize(22); doc.setTextColor(59, 130, 246); doc.text("QCM Laboratory Report", 15, 20);
+        
+        doc.setFontSize(10); doc.setTextColor(80);
+        // Added URL source
+        doc.text(`Source: ${window.location.href}`, 15, 28);
+        doc.text(`Generated: ${now.toLocaleString()}`, 15, 33);
+        doc.text(`Filename: ${fileHandle ? fileHandle.name : "N/A"}`, 15, 38);
+        
+        // Shifted separator line down slightly (was 42)
+        doc.setLineWidth(0.5); doc.line(15, 44, 195, 44);
+        
+        // Content shifted down by ~2-3 units to accommodate header change
+        doc.setFontSize(14); doc.setTextColor(0); doc.text("Experimental Parameters", 15, 52);
         doc.setFontSize(11);
-        doc.text(`Crystal F0: ${document.getElementById('pF0').value} MHz  |  Diameter: ${document.getElementById('pDiam').value} mm`, 15, 58);
-        doc.text(`Material: ${document.getElementById('pMat').value}  |  Density: ${document.getElementById('pRho').value}`, 15, 64);
+        doc.text(`Crystal F0: ${document.getElementById('pF0').value} MHz  |  Diameter: ${document.getElementById('pDiam').value} mm`, 15, 60);
+        doc.text(`Material: ${document.getElementById('pMat').value}  |  Density: ${document.getElementById('pRho').value}`, 15, 66);
 
-        doc.setFontSize(14); doc.text("Analysis Results", 15, 75); doc.setFontSize(11);
-        doc.text(`Window: ${document.getElementById('outRange').innerText}`, 15, 83);
-        doc.text(`Thickness: ${document.getElementById('outThick').innerText} nm`, 15, 89);
-        doc.text(`Rate: ${document.getElementById('outRate').innerText} nm/s`, 15, 95);
-        doc.text(`Freq Shift: ${document.getElementById('outDf').innerText}`, 100, 89);
-        doc.text(`IFF Result: ${document.getElementById('iffOut').innerText}`, 100, 95);
+        doc.setFontSize(14); doc.text("Analysis Results", 15, 78); doc.setFontSize(11);
+        doc.text(`Window: ${document.getElementById('outRange').innerText}`, 15, 86);
+        doc.text(`Thickness: ${document.getElementById('outThick').innerText} nm`, 15, 92);
+        doc.text(`Rate: ${document.getElementById('outRate').innerText} nm/s`, 15, 98);
+        doc.text(`Freq Shift: ${document.getElementById('outDf').innerText}`, 100, 92);
+        doc.text(`IFF Result: ${document.getElementById('iffOut').innerText}`, 100, 98);
 
-        let y = 105;
+        let y = 108; // Start plotting slightly lower
         const addPlot = (id, title) => {
             doc.setFontSize(12); doc.setTextColor(59, 130, 246); doc.text(title, 15, y);
             const img = document.getElementById(id).toDataURL('image/png', 1.0);
@@ -647,8 +691,11 @@ function updateGraphs() {
         addPlot('chartF', 'Frequency Evolution');
         if (y > 200) { doc.addPage(); y=20; } addPlot('chartR', 'R');
         if (y > 200) { doc.addPage(); y=20; } addPlot('chartP', 'Phase Angle');
-        doc.save("QCM_Lab_Report.pdf");
+        
+        // Save with dynamic filename
+        doc.save(`QCM_Report_${dateStr}.pdf`);
     }
+
 </script>
 </body>
 </html>
