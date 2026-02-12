@@ -4,22 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QCM</title>
-    
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
-   
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <script>
-  Chart.register(
-    ChartZoom,
-    ChartAnnotation
-  );
+  Chart.register(ChartZoom, ChartAnnotation);
 </script>
 
 
@@ -45,13 +37,20 @@
             display: grid; grid-template-columns: 340px 4px 1fr; overflow: hidden;
         }
 
-        /* --- SIDEBAR --- */
+    
         .sidebar {
             background: var(--panel); border-right: 1px solid var(--border);
             display: flex; flex-direction: column; height: 100vh;
         }
 
-        .sb-header { padding: 15px 20px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); flex-shrink: 0; }
+        .sb-header { 
+    padding: 15px 20px; 
+    border-bottom: 1px solid var(--border); 
+    background: rgba(0,0,0,0.2); 
+    flex-shrink: 0; 
+    text-align: center; 
+}
+
         .sb-header h2 { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.5px; }
         .sb-header small { color: var(--text-dim); font-size: 0.8rem; }
 
@@ -63,7 +62,7 @@
             display: flex; flex-direction: column; gap: 20px; 
         }
 
-        /* SMART CONNECT BUTTON */
+        
         .btn-connect {
             background: var(--accent); color: white; border: none; padding: 12px; border-radius: 6px; 
             font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -126,6 +125,18 @@
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 0.8rem; font-weight: 700; color: #475569; }
         .chart-box { flex: 1; position: relative; min-height: 0; width: 100%; cursor: crosshair; }
 
+
+
+        .header-controls { display: flex; gap: 6px; }
+        .btn-mini { font-size:0.7rem; cursor:pointer; background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 8px; border-radius:4px; transition: all 0.2s; }
+        .btn-mini:hover { background: #e2e8f0; }
+        
+        /* Active Zoom State */
+        .btn-mini.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+
+
+
         .overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(255,255,255,0.9); z-index: 10;
@@ -144,7 +155,7 @@
 <div class="sidebar">
     <div class="sb-header">
         <h2>QCM Analyst</h2>
-        <small>version 01 feb 2026</small>
+        <small>version 12 feb 2026</small>
     </div>
 
     <div class="sb-content">
@@ -229,10 +240,16 @@
 <div class="stage">
     
     <div class="chart-container chart-top">
+        
+
         <div class="chart-header">
-            FREQUENCY SHIFT (Hz)
-            <button onclick="resetZoomAll()" style="font-size:0.7rem; cursor:pointer; background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 8px; border-radius:4px;">Reset Zoom</button>
-        </div>
+    FREQUENCY SHIFT (Hz)
+    <div class="header-controls">
+        <button id="btnZoomToggle" class="btn-mini" onclick="toggleZoomMode()">Zoom: OFF</button>
+        <button class="btn-mini" onclick="resetZoomAll()">Reset View</button>
+    </div>
+</div>
+
         <div class="chart-box">
             <canvas id="chartF"></canvas>
             <div id="overlayMsg" class="overlay">
@@ -279,6 +296,8 @@
 
     let cF, cR, cP; 
     let cursorStart = 0, cursorEnd = 0, isDragging = null;
+
+    let isZoomMode = false;
 
     /* --- INITIALIZATION --- */
     window.onload = () => {
@@ -419,7 +438,7 @@
 
 
     function initCharts() {
-    // 1. Define the base config (Cleaned up Pan settings)
+    // Base Configuration
     const getCommonOptions = () => ({
         responsive: true,
         maintainAspectRatio: false,
@@ -432,29 +451,24 @@
         plugins: {
             legend: { display: false },
             zoom: {
-                limits: {
-                    x: { min: 'original', max: 'original' },
-                    y: { min: 'original', max: 'original' }
-                },
-                pan: {
-                    enabled: true,
-                    mode: 'xy',
-                    modifierKey: null, // FIX: Allow panning without holding keys
-                    threshold: 5
-                },
+                limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } },
                 zoom: {
                     wheel: { enabled: true },
                     pinch: { enabled: true },
-                    drag: { enabled: false },
+                    drag: { 
+                        enabled: false, // OFF by default
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)', 
+                        borderColor: '#3b82f6', 
+                        borderWidth: 1, 
+                        threshold: 10 
+                    },
                     mode: 'xy'
                 }
             }
         }
     });
 
-    // 2. Initialize Charts 
-   
-    // Frequency Chart (Custom logic for annotations)
+    // 1. Frequency Chart
     const fOpts = getCommonOptions();
     fOpts.plugins.annotation = {
         annotations: {
@@ -469,22 +483,50 @@
         options: fOpts
     });
 
-    // Resistance Chart
+    // 2. Resistance Chart
     cR = new Chart(document.getElementById('chartR'), {
         type: 'line',
         data: { datasets: [{ data: [], borderColor: '#ec4899' }] },
-        options: getCommonOptions() // FIX: New object instance
+        options: getCommonOptions()
     });
 
-    // Phase Chart
+    // 3. Phase Chart
     cP = new Chart(document.getElementById('chartP'), {
         type: 'line',
         data: { datasets: [{ data: [], borderColor: '#f59e0b' }] },
-        options: getCommonOptions() // FIX: New object instance
+        options: getCommonOptions()
     });
 }
 
-function updateGraphs() {
+function toggleZoomMode() {
+    isZoomMode = !isZoomMode; // Toggle State
+    
+    const btn = document.getElementById('btnZoomToggle');
+    const canvas = document.getElementById('chartF');
+
+    // 1. Update UI
+    if (isZoomMode) {
+        btn.innerText = "Zoom: ON";
+        btn.classList.add('active');
+        canvas.style.cursor = 'crosshair';
+    } else {
+        btn.innerText = "Zoom: OFF";
+        btn.classList.remove('active');
+        canvas.style.cursor = 'default';
+    }
+
+    // 2. Update Charts logic
+    [cF, cR, cP].forEach(chart => {
+        if (chart && chart.options.plugins.zoom) {
+            chart.options.plugins.zoom.zoom.drag.enabled = isZoomMode;
+            chart.update('none');
+        }
+    });
+}
+
+
+
+    function updateGraphs() {
 
     const makeXY = (yArr) =>
         D.t.map((t, i) => ({ x: t, y: yArr[i] }));
@@ -507,27 +549,30 @@ function updateGraphs() {
     function setupCursors() {
     const canvas = document.getElementById('chartF');
     
-    // 1. Visual Feedback (Cursor Icon)
+    // 1. Hover Effect (Only active if Zoom is OFF)
     canvas.addEventListener('mousemove', (e) => {
+        if (isZoomMode) return; 
         if (isDragging) return;
 
         const rect = canvas.getBoundingClientRect();
         const xVal = cF.scales.x.getValueForPixel(e.clientX - rect.left);
         const range = cF.scales.x.max - cF.scales.x.min;
         
-        // Check distance to cursors (5% tolerance)
+        // Check if near cursor (5% tolerance)
         const hitStart = Math.abs(xVal - cursorStart) < range * 0.05;
         const hitEnd = Math.abs(xVal - cursorEnd) < range * 0.05;
 
         if (hitStart || hitEnd) {
-            canvas.style.cursor = 'ew-resize'; // Show "I can drag this line"
+            canvas.style.cursor = 'ew-resize';
         } else {
-            canvas.style.cursor = 'default';   // Show "I can pan the chart"
+            canvas.style.cursor = 'default';
         }
     });
     
-    // 2. Interaction Logic
+    // 2. Start Dragging (Only active if Zoom is OFF)
     canvas.addEventListener('mousedown', (e) => {
+        if (isZoomMode) return; // If Zoom is ON, let Chart.js handle it
+        
         const rect = canvas.getBoundingClientRect();
         const xVal = cF.scales.x.getValueForPixel(e.clientX - rect.left);
         const range = cF.scales.x.max - cF.scales.x.min;
@@ -535,19 +580,17 @@ function updateGraphs() {
         const hitStart = Math.abs(xVal - cursorStart) < range * 0.05;
         const hitEnd = Math.abs(xVal - cursorEnd) < range * 0.05;
         
-        // PRIORITY: If we hit a cursor, WE take the event.
-        if(hitStart || hitEnd) {
+        if (hitStart || hitEnd) {
             isDragging = hitStart ? 'start' : 'end';
             e.preventDefault(); 
-            e.stopPropagation(); // <--- This stops the Chart Zoom plugin from seeing the click
+            e.stopPropagation(); // Stop Chart.js from seeing this click
         }
-        // OTHERWISE: We do nothing. The event bubbles to Chart.js -> Hammer.js -> Pan works.
     });
 
+    // 3. Move Logic
     window.addEventListener('mousemove', (e) => {
-        if(!isDragging) return;
+        if (!isDragging) return;
         
-        // We are dragging a cursor, so kill all other interactions
         e.preventDefault(); 
         e.stopPropagation();
         
@@ -555,21 +598,23 @@ function updateGraphs() {
         let val = cF.scales.x.getValueForPixel(e.clientX - rect.left);
         
         // Clamp to data bounds
-        if(D.t.length) val = Math.max(D.t[0], Math.min(D.t[D.t.length-1], val));
+        if (D.t.length) val = Math.max(D.t[0], Math.min(D.t[D.t.length-1], val));
         
-        if(isDragging==='start') cursorStart = val; else cursorEnd = val;
+        if (isDragging === 'start') cursorStart = val; else cursorEnd = val;
         
-        // Update Visuals
+        // Visual Update
         cF.options.plugins.annotation.annotations.line1.value = cursorStart;
         cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
-        cF.update('none'); // Efficient update
+        cF.update('none');
         recalc();
     });
 
+    // 4. End Dragging
     window.addEventListener('mouseup', () => {
         isDragging = null;
     });
 }
+
 
     /* --- PHYSICS --- */
     function getY(t) {
