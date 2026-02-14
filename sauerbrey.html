@@ -3,17 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QCM</title>
+    <title>QCM Analyst</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-    <script>
-  Chart.register(ChartZoom, ChartAnnotation);
-</script>
-
 
     <style>
         :root {
@@ -54,7 +49,7 @@
         .sb-header h2 { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.5px; }
         .sb-header small { color: var(--text-dim); font-size: 0.8rem; }
 
-        /* SCROLLABLE CONTENT AREA */
+        /* left part */
         .sb-content { 
             flex: 1; 
             overflow-y: auto; /* Vertical scrollbar only if needed */
@@ -73,13 +68,13 @@
         .btn-connect.active { background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--success); }
         .btn-connect.error { border-color: var(--error); color: var(--error); }
 
-        /* LED INSIDE BUTTON */
+        /* signale avec une LED l'access */
         .btn-led { width: 8px; height: 8px; border-radius: 50%; background: white; display: none; box-shadow: 0 0 5px rgba(255,255,255,0.8); }
         .btn-connect.active .btn-led { display: block; background: var(--success); box-shadow: 0 0 8px var(--success); }
         .btn-connect.active .btn-led.blink { opacity: 0.3; }
         .btn-connect.error .btn-led { display: block; background: var(--error); box-shadow: 0 0 8px var(--error); }
 
-        /* PARAMETERS */
+        /* params */
         .section-title { font-size: 0.7rem; text-transform: uppercase; color: var(--accent); font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
         .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
         .input-group label { display: block; font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px; }
@@ -155,7 +150,7 @@
 <div class="sidebar">
     <div class="sb-header">
         <h2>QCM Analyst</h2>
-        <small>version 12 feb 2026</small>
+        <small>version 14 feb 2026</small>
     </div>
 
     <div class="sb-content">
@@ -244,10 +239,14 @@
 
         <div class="chart-header">
     FREQUENCY SHIFT (Hz)
+
     <div class="header-controls">
-        <button id="btnZoomToggle" class="btn-mini" onclick="toggleZoomMode()">Zoom: OFF</button>
-        <button class="btn-mini" onclick="resetZoomAll()">Reset View</button>
-    </div>
+<span id="panHint" style="display:none; font-size:0.65rem; color:#94a3b8; align-self:center;">Shift+Drag to pan</span>
+<button id="btnAutoCursor" class="btn-mini" style="display:none;" onclick="toggleAutoCursor()">Auto: OFF</button>
+<button id="btnZoomToggle" class="btn-mini" onclick="toggleZoomMode()">Zoom: OFF</button>
+<button class="btn-mini" onclick="resetZoomAll()">Reset View</button>
+</div>
+
 </div>
 
         <div class="chart-box">
@@ -298,6 +297,39 @@
     let cursorStart = 0, cursorEnd = 0, isDragging = null;
 
     let isZoomMode = false;
+
+
+    let isAutoCursor = false;
+
+function toggleAutoCursor() {
+isAutoCursor = !isAutoCursor;
+const btn = document.getElementById('btnAutoCursor');
+if (isAutoCursor) {
+btn.innerText = "Auto: ON";
+btn.classList.add('active');
+applyAutoCursors();
+} else {
+btn.innerText = "Auto: OFF";
+btn.classList.remove('active');
+}
+}
+
+function applyAutoCursors() {
+if (!isAutoCursor || D.t.length === 0) return;
+cursorStart = Math.max(D.t[0], cF.scales.x.min);
+cursorEnd = Math.min(D.t[D.t.length-1], cF.scales.x.max);
+
+cF.options.plugins.annotation.annotations.line1.value = cursorStart;
+cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
+cF.update('none');
+recalc();
+}
+
+
+
+
+
+
 
     /* --- INITIALIZATION --- */
     window.onload = () => {
@@ -399,19 +431,17 @@
             const cols = normalizedLine.split(/\s+/).filter(x => x !== "");
 
             // 5. Parse Data
-            if (cols.length >= 4) {
+            // Robust check: ensure we have enough columns AND the first two are valid numbers
+            if (cols.length >= 4 && !isNaN(parseFloat(cols[0])) && !isNaN(parseFloat(cols[1]))) {
                 const t = parseFloat(cols[0]);
                 const f = parseFloat(cols[1]);
                 
-                // Ensure we have valid numbers
-                if (!isNaN(t) && !isNaN(f)) {
-                    D.t.push(t); 
-                    D.f.push(f);
-                    D.r.push(parseFloat(cols[2])); 
-                    D.p.push(parseFloat(cols[3]));
-                    
-                    newPointsCount++;
-                }
+                D.t.push(t); 
+                D.f.push(f);
+                D.r.push(parseFloat(cols[2])); 
+                D.p.push(parseFloat(cols[3]));
+                
+                newPointsCount++;
             }
         });
 
@@ -425,55 +455,73 @@
             
             // Auto-Scroll Logic:
             // If cursor was at the previous end (monitoring live), move it to the new end.
-            // We use 'newPointsCount' instead of 'lines.length' to account for skipped comment lines.
             const prevEndIndex = D.t.length - 1 - newPointsCount;
             if (prevEndIndex >= 0 && cursorEnd === D.t[prevEndIndex]) {
                 cursorEnd = D.t[D.t.length - 1];
             }
 
             updateGraphs();
-            recalc();
+            recalc(); // Recalculate only once after processing the chunk
         }
     }
 
 
     function initCharts() {
     // Base Configuration
-    const getCommonOptions = () => ({
+    const getCommonOptions = (color) => ({
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        elements: { point: { radius: 0 }, line: { borderWidth: 1.5, tension: 0 } },
+        // Style from image: thicker lines, no points
+        elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0 } },
         scales: {
-            x: { type: 'linear', grid: { display: false }, ticks: { color: '#475569', font: { size: 10 }, maxTicksLimit: 8 } },
-            y: { grid: { display: false }, ticks: { color: '#475569', font: { size: 10 } } }
-        },
-        plugins: {
-            legend: { display: false },
-            zoom: {
-                limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } },
-                zoom: {
-                    wheel: { enabled: true },
-                    pinch: { enabled: true },
-                    drag: { 
-                        enabled: false, // OFF by default
-                        backgroundColor: 'rgba(59, 130, 246, 0.2)', 
-                        borderColor: '#3b82f6', 
-                        borderWidth: 1, 
-                        threshold: 10 
-                    },
-                    mode: 'xy'
-                }
+            x: { 
+                type: 'linear', 
+                grid: { display: false }, 
+                ticks: { color: '#475569', font: { size: 11, weight: '600' }, maxTicksLimit: 8 } 
+            },
+            y: { 
+                grid: { color: '#e2e8f0' }, // Subtle grid for Y-axis
+                ticks: { color: '#475569', font: { size: 11, weight: '600' } } 
             }
-        }
+        },
+    
+
+        plugins: {
+legend: { display: false },
+zoom: {
+limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } },
+pan: {
+enabled: true,
+mode: 'xy',
+modifierKey: 'shift',
+onPanComplete: applyAutoCursors
+},
+zoom: {
+wheel: { enabled: true },
+pinch: { enabled: true },
+drag: {
+enabled: false,
+backgroundColor: 'rgba(59, 130, 246, 0.2)',
+borderColor: '#3b82f6',
+borderWidth: 1,
+threshold: 10
+},
+mode: 'xy',
+onZoomComplete: applyAutoCursors
+}
+}
+}
+
+
     });
 
-    // 1. Frequency Chart
+    // Frequency Chart... pas d'echelle X, osef
     const fOpts = getCommonOptions();
     fOpts.plugins.annotation = {
         annotations: {
-            line1: { type: 'line', scaleID: 'x', value: 0, borderColor: '#10b981', borderWidth: 2, label: { display: true, content: 'Start' } },
-            line2: { type: 'line', scaleID: 'x', value: 0, borderColor: '#ef4444', borderWidth: 2, label: { display: true, content: 'End' } }
+            line1: { type: 'line', scaleID: 'x', value: 0, borderColor: '#10b981', borderWidth: 2, label: { display: true, content: 'Start', position: 'start', backgroundColor: '#10b981', font: {weight: 'bold'} } },
+            line2: { type: 'line', scaleID: 'x', value: 0, borderColor: '#ef4444', borderWidth: 2, label: { display: true, content: 'End', position: 'end', backgroundColor: '#ef4444', font: {weight: 'bold'} } }
         }
     };
     
@@ -483,14 +531,14 @@
         options: fOpts
     });
 
-    // 2. Resistance Chart
+    // Resistance Chart
     cR = new Chart(document.getElementById('chartR'), {
         type: 'line',
         data: { datasets: [{ data: [], borderColor: '#ec4899' }] },
         options: getCommonOptions()
     });
 
-    // 3. Phase Chart
+    // Phase Chart
     cP = new Chart(document.getElementById('chartP'), {
         type: 'line',
         data: { datasets: [{ data: [], borderColor: '#f59e0b' }] },
@@ -498,35 +546,40 @@
     });
 }
 
+
 function toggleZoomMode() {
-    isZoomMode = !isZoomMode; // Toggle State
-    
-    const btn = document.getElementById('btnZoomToggle');
-    const canvas = document.getElementById('chartF');
+isZoomMode = !isZoomMode;
 
-    // 1. Update UI
-    if (isZoomMode) {
-        btn.innerText = "Zoom: ON";
-        btn.classList.add('active');
-        canvas.style.cursor = 'crosshair';
-    } else {
-        btn.innerText = "Zoom: OFF";
-        btn.classList.remove('active');
-        canvas.style.cursor = 'default';
+const btn = document.getElementById('btnZoomToggle');
+const btnAuto = document.getElementById('btnAutoCursor');
+const canvas = document.getElementById('chartF');
+const hint = document.getElementById('panHint');
+
+if (isZoomMode) {
+    btn.innerText = "Zoom: ON";
+    btn.classList.add('active');
+    canvas.style.cursor = 'crosshair';
+    hint.style.display = 'inline';
+    btnAuto.style.display = 'inline-block';
+} else {
+    btn.innerText = "Zoom: OFF";
+    btn.classList.remove('active');
+    canvas.style.cursor = 'default';
+    hint.style.display = 'none';
+    btnAuto.style.display = 'none';
+    if (isAutoCursor) toggleAutoCursor();
+}
+
+[cF, cR, cP].forEach(chart => {
+    if (chart && chart.options.plugins.zoom) {
+        chart.options.plugins.zoom.zoom.drag.enabled = isZoomMode;
+        chart.update('none');
     }
-
-    // 2. Update Charts logic
-    [cF, cR, cP].forEach(chart => {
-        if (chart && chart.options.plugins.zoom) {
-            chart.options.plugins.zoom.zoom.drag.enabled = isZoomMode;
-            chart.update('none');
-        }
-    });
+});
 }
 
 
-
-    function updateGraphs() {
+function updateGraphs() {
 
     const makeXY = (yArr) =>
         D.t.map((t, i) => ({ x: t, y: yArr[i] }));
@@ -544,7 +597,7 @@ function toggleZoomMode() {
     cP.update('none');
 }
 
-    function resetZoomAll() { cF.resetZoom(); cR.resetZoom(); cP.resetZoom(); }
+    function resetZoomAll() { cF.resetZoom(); cR.resetZoom(); cP.resetZoom(); applyAutoCursors(); }
 
     function setupCursors() {
     const canvas = document.getElementById('chartF');
@@ -616,7 +669,7 @@ function toggleZoomMode() {
 }
 
 
-    /* --- PHYSICS --- */
+    /* Calculs */
     function getY(t) {
         if(D.t.length===0) return 0;
         let i = 0; while(i < D.t.length && D.t[i] < t) i++;
@@ -695,51 +748,68 @@ function toggleZoomMode() {
 
 
     function makePDF() {
-        if (D.t.length === 0) return alert("No data.");
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        
-        // Generate timestamp for filename
-        const now = new Date();
-        const dateStr = now.toISOString().replace(/T/, '_').replace(/:/g, '-').slice(0, 16);
+    if (D.t.length === 0) return alert("No data.");
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    const now = new Date();
+    const dateStr = now.toISOString().replace(/T/, '_').replace(/:/g, '-').slice(0, 16);
+    const currentURL = window.location.href; // Get current URL
 
-        doc.setFontSize(22); doc.setTextColor(59, 130, 246); doc.text("QCM Laboratory Report", 15, 20);
-        
-        doc.setFontSize(10); doc.setTextColor(80);
-        // Added URL source
-        doc.text(`Source: ${window.location.href}`, 15, 28);
-        doc.text(`Generated: ${now.toLocaleString()}`, 15, 33);
-        doc.text(`Filename: ${fileHandle ? fileHandle.name : "N/A"}`, 15, 38);
-        
-        // Shifted separator line down slightly (was 42)
-        doc.setLineWidth(0.5); doc.line(15, 44, 195, 44);
-        
-        // Content shifted down by ~2-3 units to accommodate header change
-        doc.setFontSize(14); doc.setTextColor(0); doc.text("Experimental Parameters", 15, 52);
-        doc.setFontSize(11);
-        doc.text(`Crystal F0: ${document.getElementById('pF0').value} MHz  |  Diameter: ${document.getElementById('pDiam').value} mm`, 15, 60);
-        doc.text(`Material: ${document.getElementById('pMat').value}  |  Density: ${document.getElementById('pRho').value}`, 15, 66);
+    // Header
+    doc.setFontSize(22); doc.setTextColor(59, 130, 246); doc.text("QCM Laboratory Report", 15, 20);
+    doc.setFontSize(10); doc.setTextColor(80);
+    doc.text(`Program URL: ${currentURL}`, 15, 28); // Add URL here
+    doc.text(`Generated: ${now.toLocaleString()}`, 15, 33);
+    doc.text(`Filename: ${fileHandle ? fileHandle.name : "N/A"}`, 15, 38);
+    doc.line(15, 43, 195, 43);
 
-        doc.setFontSize(14); doc.text("Analysis Results", 15, 78); doc.setFontSize(11);
-        doc.text(`Window: ${document.getElementById('outRange').innerText}`, 15, 86);
-        doc.text(`Thickness: ${document.getElementById('outThick').innerText} nm`, 15, 92);
-        doc.text(`Rate: ${document.getElementById('outRate').innerText} nm/s`, 15, 98);
-        doc.text(`Freq Shift: ${document.getElementById('outDf').innerText}`, 100, 92);
-        doc.text(`IFF Result: ${document.getElementById('iffOut').innerText}`, 100, 98);
+    // Section 1: Setup & Physics
+    doc.setFontSize(14); doc.setTextColor(0); doc.text("Experimental Parameters", 15, 53);
+    doc.setFontSize(11);
+    doc.text(`Crystal F0: ${document.getElementById('pF0').value} MHz`, 15, 61);
+    doc.text(`Diameter: ${document.getElementById('pDiam').value} mm`, 15, 67);
+    doc.text(`Material: ${document.getElementById('pMat').value}`, 80, 61);
+    doc.text(`Density: ${document.getElementById('pRho').value} g/cm³`, 80, 67);
+    doc.text(`Z-Factor: ${document.getElementById('pZ').value}`, 140, 61);
+    doc.text(`Method: ${document.getElementById('outMethod').innerText}`, 140, 67);
 
-        let y = 108; // Start plotting slightly lower
-        const addPlot = (id, title) => {
-            doc.setFontSize(12); doc.setTextColor(59, 130, 246); doc.text(title, 15, y);
-            const img = document.getElementById(id).toDataURL('image/png', 1.0);
-            doc.addImage(img, 'PNG', 15, y+2, 180, 70); y += 80;
-        };
-        addPlot('chartF', 'Frequency Evolution');
-        if (y > 200) { doc.addPage(); y=20; } addPlot('chartR', 'R');
-        if (y > 200) { doc.addPage(); y=20; } addPlot('chartP', 'Phase Angle');
-        
-        // Save with dynamic filename
-        doc.save(`QCM_Report_${dateStr}.pdf`);
-    }
+    // Section 2: Cursor Analysis
+    doc.setFontSize(14); doc.text("Analysis Results (Cursor Window)", 15, 80);
+    doc.setFontSize(11);
+    doc.text(`Time Range: ${document.getElementById('outRange').innerText}`, 15, 88);
+    doc.text(`Final Thickness: ${document.getElementById('outThick').innerText} nm`, 15, 94);
+    doc.text(`Deposition Rate: ${document.getElementById('outRate').innerText} nm/s`, 15, 100);
+    doc.text(`Total Freq Shift: ${document.getElementById('outDf').innerText}`, 100, 88);
+    
+    // IFF Section
+    const refRate = document.getElementById('iffRef').value || "N/A";
+    doc.text(`IFF Ref Rate: ${refRate} nm/s`, 100, 94);
+    doc.setTextColor(16, 185, 129); // Green for IFF result
+    doc.text(`IFF Result: ${document.getElementById('iffOut').innerText}`, 100, 100);
+    doc.setTextColor(0);
+
+    // Plots
+let y = 115;
+
+doc.setFontSize(12); doc.setTextColor(59, 130, 246); doc.text('Frequency Evolution (Hz)', 15, y);
+const imgF = document.getElementById('chartF').toDataURL('image/png', 2.0);
+doc.addImage(imgF, 'PNG', 15, y + 2, 180, 70);
+
+y += 85;
+
+doc.text('Resistance (Ohm)', 15, y);
+const imgR = document.getElementById('chartR').toDataURL('image/png', 2.0);
+doc.addImage(imgR, 'PNG', 15, y + 2, 85, 45);
+
+doc.text('Phase Angle (Degrees)', 110, y);
+const imgP = document.getElementById('chartP').toDataURL('image/png', 2.0);
+doc.addImage(imgP, 'PNG', 110, y + 2, 85, 45);
+
+    
+    doc.save(`QCM_Report_${dateStr}.pdf`);
+}
+
 
 </script>
 </body>
