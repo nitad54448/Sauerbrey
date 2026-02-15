@@ -145,7 +145,7 @@ The goal is to capture fast plasma transients while maintaining stable multi-loo
 | Demodulator | Role | Recommended Time Constant | Filter Order | Purpose |
 |-------------|------|--------------------------|--------------|---------|
 | **Demod 1** | **PLL Source** | **0.3 – 1 ms** | 4 | Stable phase tracking without reacting to plasma spikes |
-| **Demod 2** | **DAQ Measurement** | **2 – 10 µs** | **1 (Critical)** | High temporal resolution, minimal filter delay |
+| **Demod 2** | **DAQ Measurement** | **.1 – 1 µs** | **1 (Critical)** | High temporal resolution, minimal filter delay |
 | **Demod 3** | **Q-Control Source** | **20 – 50 µs** | 4 | Fast damping control without noise amplification |
 | **Demod 4** | **AGC Source** | **50 – 200 ms** | 4 | Slow amplitude stabilization; must not follow pulses |
 
