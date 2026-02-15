@@ -51,6 +51,12 @@ With the frequency locked, we must calibrate the relationship between the Q-Cont
 
 ---
 
+
+## Q-Control Signal Flow Diagram
+
+![Q-Control Flow Diagram](q-control-flow.png)
+
+
 ## Part 2: Hardware & System Topology
 
 ### A. Hardware Wiring & Output Routing
