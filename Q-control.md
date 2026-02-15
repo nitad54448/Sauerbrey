@@ -2,137 +2,113 @@
 
 **Application:** QCM / Resonator Tracking with Active Damping  
 **Instrument:** Zurich Instruments UHFLI (UHF-Lock-in)  
-**Topology:** 4-Demodulator "Mnemonic" Setup (1=PLL, 3=Q, 4=AGC)  
-
-
----
-
-## 1. System Topology & Demodulator Mapping
-
-We map the PIDs directly to their corresponding Demodulators. 
-**Crucial Concept:** The PLL (PID 1) must be engaged first and remain active continuously. If the system drifts off resonance, Q-control and AGC will fail. 
-
-* **Demod 1 (PLL Source):** Feeds PID 1 to track frequency. Tracks phase to ensure you are always driving exactly at resonance.
-* **Demod 2 (Measurement):** Reserved for high-speed DAQ/Scope (Ring-down). 
-* **Demod 3 (Q-Control):** Feeds PID 3 to create damping force. Provides instantaneous feedback without phase lag.
-* **Demod 4 (AGC Source):** Feeds PID 4 to stabilize amplitude. Slow integration to keep drive voltage stable.
-
-> **Note:** All 4 Demodulators must be set to the same Oscillator (e.g., Oscillator 1).
+**Topology:** 4-Demodulator "Mnemonic" Setup (1=PLL, 2=Measurement, 3=Q, 4=AGC)  
 
 ---
 
-## 2. Hardware Wiring & Setup
+## Part 1: The Experimental Workflow
 
+This section outlines the logical sequence to initialize the system, calibrate the active damping, and lock the resonator for measurement.
 
-* **Drive Output:** UHF Connection is Signal Output 1. This is the main excitation, controlled by AGC (PID 4).
-* **Q-Feedback:** UHF Connection is Signal Output 2. This is the feedback force, controlled by Q-PID (PID 3).
-* **Input Signal:** UHF Connection is Signal Input 1. This is the resonator response, which feeds all Demods.
+### Step 1: Initial Sweep & Characterization
+Before engaging any control loops, we must find the natural state of the QCM.
+1. Run a frequency sweep across the expected resonance (e.g., around 6 MHz).
+2. Calculate the native resonance frequency ($f_0$), bandwidth (BW), and native Q-factor from the amplitude peak .
+3. Locate the frequency where the phase slope ($d\Theta/df$) is steepest. 
+4. Record the exact phase angle at this steepest point. **This is the resonance phase setpoint.** (Lorentz fit and Pratt circle should give similar values; use unwrap in sweep ?)
+5. Check the slope direction: If it goes down through resonance, the slope is Normal. If it goes up (due to parasitic capacitance), the slope is Inverted.
 
-> **Critical Hardware Step:** Physically sum Signal Output 1 and Signal Output 2 (using a BNC T-piece or combiner) before connecting to the resonator drive pin.
+### Step 2: Engage Frequency Tracking (PID 1)
+The Phase Locked Loop (PLL) must be engaged first and remain active continuously.
+1. Use the PID Advisor to calculate baseline Proportional (P) and Integral (I) gains for a target bandwidth of 10 to 50 Hz.
+2. Apply the polarity rule: If your phase slope is Normal, use Negative P and I gains. If Inverted, use Positive P and I gains. **D-Gain is always 0.**
+3. Apply your measured phase setpoint from Step 1 to PID 1.
+4. Enable PID 1 (in PLL). The lock-in will now continuously track the resonance frequency.
+
+### Step 3: Q-Calibration & Scanning (PID 3)
+With the frequency locked, we must calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$).
+1. Ensure PID 3 P-gain starts at 0.
+2. Define a safe $K_p$ scan array (e.g., 0.0 to 10.0).
+3. **For each $K_p$ value in the array:**
+    * Apply $K_p$ to PID 3, **enable PID 3** (`pids/2/enable -> 1`), and wait 500 ms for the system to settle.
+    * Subscribe to the Demod 2 data stream via software and begin polling (or use DAQ or scope ?).
+    * Cut the drive signal (`sigouts/0/on -> 0`).
+    * MEasure ~30 - 50 ms for the amplitude to ring down completely.
+    * Restore the drive signal (`sigouts/0/on -> 1`) and stop polling.
+    * **Disable PID 3** (`pids/2/enable -> 0`) before iterating to the next gain value (or maybe disable PID before the signal ? need to check this).
+    * **Safety Check:** If the amplitude grew instead of decaying, we have crossed the lasing threshold. Abort the scan and force PID 3 to 0.
+    * Fit the valid decay curve to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
+
+### Step 4: Engage Steady State
+1. Using the linear fit of the calibration data, we calculate the $K_p$ required for the target Q (e.g., 10k).
+2. Apply this final $K_p$ to PID 3 and **enable PID 3 permanently** (`pids/2/enable -> 1`). The resonator should now actively be damped.
+3. **Scale the PLL:** Because lowering the Q widens the bandwidth and alters the phase slope, scale the PID 1 gains to maintain stability: $P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$.
+4. **Engage AGC:** **Enable PID 4** (`pids/3/enable -> 1`) to adjust the drive voltage and keep the amplitude stable at the target setpoint.
+5. Begin the mass-loading experiment, logging the Oscillator 1 frequency continuously.
 
 ---
 
-## 3. Practical Example: 6 MHz Crystal (Q = 50k)
+## Part 2: Hardware & System Topology
 
-For an EE student setting this up, raw numbers help. Let's calculate the system parameters for a 6 MHz crystal with a Q of 50,000 and a native bandwidth (BW) of ~120-200 Hz.
+### A. Hardware Wiring & Output Routing
+* **Input Signal (`Signal Input 1`):** Resonator response. Feeds all four Demods.
+* **Drive Output (`Signal Output 1`):** Main excitation, controlled by PID 4 (AGC). Set Phase to 0.0 deg. Routed to Oscillator 1.
+* **Q-Feedback (`Signal Output 2`):** Feedback force, controlled by PID 3 (Q-Control). Set Phase to 90.0 deg. **Must be explicitly routed to Oscillator 1.**
 
-**System Physics:**
-* Resonance Frequency (f0) = 6,000,000 Hz
-* Decay Time Constant (tau) = Q / (pi * f0) = 50,000 / (pi * 6e6) = ~2.65 ms
+> **Critical Hardware Step:** Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece before connecting to the resonator.
 
-**Recommended Demodulator Time Constants (TC):**
-* **Demod 1 (PLL): ~1 to 3 ms.** Must be fast enough to track drift, but slow enough to reject noise. 
-* **Demod 2 (DAQ): ~100 us.** Must be at least 10x faster than the 2.65 ms decay time to accurately capture the ring-down envelope.
-* **Demod 3 (Q-Control): ~10 to 30 us.** Needs to be as fast as safely possible to provide real-time force feedback.
-* **Demod 4 (AGC): ~50 to 100 ms.** Needs to be much slower than the crystal decay to avoid fighting the Q-control dynamics.
+### B. Demodulator Settings (Example for 6 MHz, Q=50k)
+All Demods must be referenced to `Oscillator 1`. To optimize USB bandwidth, enable data streaming ONLY for Demod 2 during the ring-down phase.
 
-**PID Advisor Recommendations:**
-* **PID 1 (PLL): YES.** Use the Advisor. Target a loop BW of ~10 to 50 Hz (well below the crystal's 200 Hz BW) to get your baseline Proportional (P) and Integral (I) gains.
-* **PID 3 (Q-Control): NO.** The Advisor cannot model your physical acoustic feedback loop. Gain must be found manually via sweep.
-* **PID 4 (AGC): YES.** Use the Advisor to target a very slow loop BW (~1 to 5 Hz).
+| Demodulator | Role | Time Constant (TC) | Filter Order |
+| :--- | :--- | :--- | :--- |
+| **Demod 1** | **PLL Source** | ~1 ms | 4 (Standard) |
+| **Demod 2** | **Measurement** | **10 µs** | **1 (Crucial to prevent filter delay)** |
+| **Demod 3** | **Q-Control** | ~30 µs | 4 (Fast) |
+| **Demod 4** | **AGC Source** | ~100 ms | 4 (Slow) |
 
----
 
-## 4. Controller Configuration Reference
+### C. Controller Configuration Reference
+Configure the PID modules in your API. Note that PID 2 is skipped.
 
-Configure the PID modules in LabVIEW (or other APIs). Note that PID 2 is skipped.
-
-| Parameter | PID 1 (PLL) | PID 3 (Q-Control) | PID 4 (AGC) |
+| Parameter | PID 1 | PID 3 (Q-Control) | PID 4 (AGC) |
 | :--- | :--- | :--- | :--- |
 | **Function** | Frequency Tracking | Active Damping | Amplitude Stability |
+| **Module Mode** | **PLL** | **PID** | **PID** |
 | **Input Source** | Demod 1 Phase | Demod 3 R (Amp) | Demod 4 R (Amp) |
-| **Setpoint** | 0.0 deg | 0.0 V | Target Amplitude (e.g. 0.1 V) |
+| **Setpoint** | Measured Phase at Resonance | 0.0 V | Target Amp (e.g., 0.1 V) |
 | **Output Channel**| Oscillator 1 Freq | Signal Output 2 Amp | Signal Output 1 Amp |
 | **Output Phase** | N/A | 90.0 deg (Crucial) | 0.0 deg |
-| **P-Gain (Kp)** | Adaptive (See Section 6.E) | Variable (Scan this) | Positive |
-| **I-Gain (Ki)** | Required | Zero | Positive (Slow) |
+| **P-Gain (Kp)** | Adaptive & Sign-Dependent | Variable (Scan this) | Strictly Positive |
+| **I-Gain (Ki)** | Sign-Dependent | Zero | Strictly Positive (Slow) |
+| **D-Gain (Kd)** | Zero (Do not use) | Zero | Zero |
+
+> **Critical Note on PID Polarity:** If parasitic capacitance inverts the phase slope, we must invert the P and I gains for **PID 1 only**. The amplitude peak does not invert, so the gains for PID 3 (Q-Control) and PID 4 (AGC) must always retain their standard positive polarity.
 
 ---
 
-## 5. LabVIEW Programming Algorithm
+## Part 3: Mathematical & Software Reference
 
-### Phase A: Initialization (Safe State)
-* Define Connections: Open LabOne API Session.
-* Configure Oscillator: oscs/0/freq -> Target Freq (e.g., 6 MHz).
-* Configure Demods (The 4-Demod Setup): Set all demodulators' oscselect to 0. Enable all Demods.
-* Configure Outputs:
-    * Sig 1 (Drive): Turn on, set phase to 0.0, set an initial safe amplitude (e.g., 0.05 V).
-    * Sig 2 (Feedback): Turn on, set phase to 90.0, set amp to 0.0.
-* Disable PIDs: Ensure PID 1, PID 3, and PID 4 are disabled.
+### A. The Ring-Down Fit & Data Slicing
+To extract the Q-factor, fit the amplitude envelope data from Demod 2 to:
+$$A(t) = A_0 \cdot e^{-t/\tau} + C$$
 
-### Phase B: Lock Frequency (PID 1)
-* Characterize Phase Slope: During sweep, calculate slope S = dPhase / df at resonance.
-    * If S < 0 (Normal): Use Negative P/I gains.
-    * If S > 0 (Inverted): Use Positive P/I gains (invert the Advisor suggested values).
-* Engage PID 1 and poll the error until locked. Keep this running for all subsequent phases.
+**LabVIEW Array Truncation Logic:**
+Standard curve-fitting VIs fail if fed flatlines. You must isolate the decay curve:
+1. **Find Trigger ($A_0$):** Average the first 100 samples to find the pre-trigger baseline. Search the array for the first index where amplitude drops below 95% of this baseline.
+2. **Find Noise Floor ($C$):** Average the final 10% of the array. Search for the first index where amplitude drops to within 1% of this floor.
+3. **Slice & Zero:** Truncate the time and amplitude arrays using these start/end indices. Subtract the first time value from the entire time array so the fit starts perfectly at $t=0$.
 
-### Phase C: Q-Calibration Loop (Scanning PID 3)
-*Using Demod 2 for Measurement, Demod 3 for Control.*
+$$\text{Calculate Q: } Q = \pi \cdot f_0 \cdot \tau$$
+$$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
-* Setup PID 3 (Q-Control): Input is Demod 3 R, Output is Sig Out 2 Amp, Setpoint is 0. P-Gain starts at 0.
-* Configure LabOne DAQ Module: Hardware trigger on SigOut 1 Enable falling edge. Signal Path is demods/1/sample.r (Demod 2 R).
-* Scan Loop:
-    1.  Update P-Gain on PID 3 and wait 500ms to settle.
-    2.  Arm DAQ, cut drive (sigouts/0/on -> 0), and wait for record.
-    3.  Restore drive, fetch data, and compute the exponential fit.
+### B. Calibration and Safety Logic
+The relationship between PID 3 P-gain ($K_p$) and system damping ($\Gamma$) is linear:
+$$\Gamma(K_p) = \Gamma_{native} - \alpha \cdot K_p$$
 
-### Phase D: Engage Steady State
-* Set Optimal Q: Apply calculated Target P to PID 3. Update PID 1 Gain by scaling PLL gains.
-* Engage AGC: Setup PID 4 (Input = Demod 4 R, Output = Sig Out 1 Amp) and enable.
+To hit a specific target Q, solve for $K_{p,target}$:
+$$K_{p,target} = \frac{\Gamma_{native} - \frac{\pi \cdot f_0}{Q_{target}}}{\alpha}$$
 
----
-
-## 6. Technical & Mathematical Reference
-
-
-### A. The Ring-Down Fit
-To extract the Q-factor from the DAQ time-series data, fit the amplitude envelope to:
-A(t) = A_0 * exp(-t / tau) + C
-
-* A_0: Initial Amplitude (Volts).
-* tau: Decay time constant (Seconds).
-* C: Noise floor / Offset (Volts).
-
-Calculating Q: Q = pi * f0 * tau
-Calculating Damping Rate (Gamma): Gamma = 1 / tau = (pi * f0) / Q
-
-### B. The P-Gain to Q Relationship (Calibration)
-The relationship between the PID 3 P-gain (Kp) and the system damping is linear; fit Gamma vs P.
-Gamma(Kp) = Gamma_native - alpha * Kp
-
-Solving for target Kp:
-Kp_target = (Gamma_native - ((pi * f0) / Q_target)) / alpha
-
-### C. AGC Logic (PID 4)
-The AGC reduces the Drive Voltage to keep Amplitude constant when Q increases. Use a big Integral (I) term. The Proportional (P) term should be positive but small to avoiding ringing in the amplitude domain.
-
-### D. Safety: The Lasing Threshold
-If Kp is set too high, total damping becomes negative, resulting in exponential amplitude growth (Lasing). Calculate the "Lasing P-gain" (Kp_max = Gamma_native / alpha) and set a software limit at about 80-90% of this value.
-
-### E. PID Polarity & Phase Slope Handling
-Some resonators exhibit an inverted phase slope due to capacitive feedthrough. Q-control does not fix this; it simply changes the slope.
-
-* Normal (S < 0): Use Negative P and I gains for PID 1.
-* Inverted (S > 0): Use Positive P and I gains for PID 1. The sign of P and I must match each other.
-* As Q increases, the phase slope becomes steeper, so you must reduce PID 1 gains proportionally to prevent oscillation.
-    P_new = P_native * (Q_native / Q_target)
+**Lasing Threshold:** If $K_p$ is set too high, total damping becomes negative, causing amplitude to grow exponentially (Lasing). 
+* Calculate maximum safe gain: $K_{p,max} = \frac{\Gamma_{native}}{\alpha}$.
+* Apply hardware limits (`pids/2/limitlower` and `limitupper`) to $\pm 0.5$ V to prevent damage.
