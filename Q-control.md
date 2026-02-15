@@ -121,3 +121,104 @@ $$K_{p,target} = \frac{\Gamma_{native} - \frac{\pi \cdot f_0}{Q_{target}}}{\alph
 **Lasing Threshold:** If $K_p$ is set too high, total damping becomes negative, causing amplitude to grow exponentially (Lasing). 
 * Calculate maximum safe gain: $K_{p,max} = \frac{\Gamma_{native}}{\alpha}$.
 * Apply hardware limits (`pids/2/limitlower` and `limitupper`) to $\pm 0.5$ V to prevent damage.
+
+
+---
+---
+
+## Demodulator Settings for HIPIMS DAQ Operation
+
+**Application:** HIPIMS (High Power Impulse Magnetron Sputtering) with  
+- PLL active  
+- Q-Control active  
+- AGC active  
+- DAQ streaming on Demod 2  
+- Example resonator: ~6 MHz QCM, native Q ≈ 50k  
+- Instrument: Zurich Instruments UHFLI  
+
+The goal is to capture fast plasma transients while maintaining stable multi-loop control.
+
+---
+
+### Recommended Demodulator Configuration
+
+| Demodulator | Role | Recommended Time Constant | Filter Order | Purpose |
+|-------------|------|--------------------------|--------------|---------|
+| **Demod 1** | **PLL Source** | **0.3 – 1 ms** | 4 | Stable phase tracking without reacting to plasma spikes |
+| **Demod 2** | **DAQ Measurement** | **2 – 10 µs** | **1 (Critical)** | High temporal resolution, minimal filter delay |
+| **Demod 3** | **Q-Control Source** | **20 – 50 µs** | 4 | Fast damping control without noise amplification |
+| **Demod 4** | **AGC Source** | **50 – 200 ms** | 4 | Slow amplitude stabilization; must not follow pulses |
+
+---
+
+### Design Rationale
+
+#### Demod 1 — PLL Source
+The PLL must track real frequency shifts but ignore fast plasma-induced noise.
+
+- Too fast (<100 µs) → PLL reacts to plasma transients → instability.
+- Too slow (>5 ms) → PLL may temporarily lose lock during large frequency shifts.
+
+A range of **0.3–1 ms** provides stable tracking for most HIPIMS regimes.
+
+---
+
+#### Demod 2 — Measurement (DAQ)
+This demodulator captures transient behavior during the HIPIMS pulse.
+
+- Time constant must be **much smaller than the plasma rise time**.
+- Filter order must be **1** to minimize group delay distortion.
+- If plasma rise ≈ 5 µs → use ~2 µs.
+- If plasma rise ≈ 20 µs → use 5–10 µs.
+
+This demodulator should always be the fastest in the system.
+
+---
+
+#### Demod 3 — Q-Control
+Q-control implements active viscous damping.
+
+- Too fast → amplifies noise.
+- Too slow → damping becomes ineffective during fast transients.
+
+A range of **20–50 µs** provides stable damping for a 6 MHz QCM.
+
+---
+
+#### Demod 4 — AGC
+AGC maintains constant oscillation amplitude.
+
+It must not respond to:
+- Individual HIPIMS pulses
+- Plasma ignition spikes
+
+Time constant must be **much larger than pulse duration**.
+
+Example:
+- Pulse duration = 100 µs  
+- Recommended AGC TC ≥ 50 ms  
+
+---
+
+### Loop Hierarchy Requirement
+
+For stable multi-loop operation:
+
+τ(Demod 2) ≪ τ(Demod 3) ≪ τ(Demod 1) ≪ τ(Demod 4)
+
+Fast → Slow ordering prevents loop interaction and instability.
+
+---
+
+### Important Measurement Note
+
+While Q-control is engaged, the measured damping is:
+
+Γ_effective = Γ_native − α·Kp
+
+Thus, during HIPIMS operation:
+- Frequency shifts are physically meaningful.
+- Measured Q reflects the actively controlled system.
+- Native damping requires disabling PID 3 and performing a ring-down.
+
+---
