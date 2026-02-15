@@ -143,6 +143,8 @@
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: var(--bg-app); }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    .drag-active { background-color: rgba(59, 130, 246, 0.2) !important; }
+
     </style>
 </head>
 <body>
@@ -254,7 +256,7 @@
             <div id="overlayMsg" class="overlay">
                 <svg width="48" height="48" fill="none" stroke="#cbd5e1" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
                 <p style="margin-top:10px; font-weight:600;">Ready to Monitor</p>
-                <small>Click "Open File" in the sidebar</small>
+                <small>Drag and drop a file here or Click "Open File" in the sidebar</small>
             </div>
         </div>
     </div>
@@ -809,6 +811,51 @@ doc.addImage(imgP, 'PNG', 110, y + 2, 85, 45);
     
     doc.save(`QCM_Report_${dateStr}.pdf`);
 }
+
+
+//drag and drop a file
+
+window.addEventListener('dragenter', (e) => {
+e.preventDefault();
+document.body.classList.add('drag-active');
+});
+
+window.addEventListener('dragover', (e) => {
+e.preventDefault();
+document.body.classList.add('drag-active');
+});
+
+window.addEventListener('dragleave', (e) => {
+e.preventDefault();
+if (e.relatedTarget === null || e.relatedTarget.nodeName === 'HTML') {
+document.body.classList.remove('drag-active');
+}
+});
+
+window.addEventListener('drop', async (e) => {
+e.preventDefault();
+document.body.classList.remove('drag-active');
+if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+const item = e.dataTransfer.items[0];
+if (item.kind === 'file') {
+const handle = await item.getAsFileSystemHandle();
+if (handle && handle.kind === 'file') {
+fileHandle = handle;
+resetData();
+
+            const btn = document.getElementById('btnConnect');
+            const txt = document.getElementById('btnText');
+            btn.classList.add('active');
+            txt.innerText = fileHandle.name;
+            document.getElementById('overlayMsg').style.display = 'none';
+            
+            if(pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(monitorFile, 1000); 
+            monitorFile();
+        }
+    }
+}
+});
 
 
 </script>
