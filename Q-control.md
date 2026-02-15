@@ -1,4 +1,6 @@
 # Practical Guide: Active Q-Control on Zurich Instruments UHF
+Based on notes from R. Stomp see https://www.zhinst.com/europe/en/blogs/resonance-engineering-quality-factor-q-control-method
+
 
 **Application:** QCM / Resonator Tracking with Active Damping  
 **Instrument:** Zurich Instruments UHFLI (UHF-Lock-in)  
@@ -35,9 +37,10 @@ With the frequency locked, we must calibrate the relationship between the Q-Cont
     * Cut the drive signal (`sigouts/0/on -> 0`).
     * MEasure ~30 - 50 ms for the amplitude to ring down completely.
     * Restore the drive signal (`sigouts/0/on -> 1`) and stop polling.
-    * **Disable PID 3** (`pids/2/enable -> 0`) before iterating to the next gain value (or maybe disable PID before the signal ? need to check this).
+    * **Disable PID 3** (`pids/2/enable -> 0`) before iterating to the next gain value.
     * **Safety Check:** If the amplitude grew instead of decaying, we have crossed the lasing threshold. Abort the scan and force PID 3 to 0.
     * Fit the valid decay curve to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
+    * Verify that increasing Kp reduces ring-down time constant before proceeding.
 
 ### Step 4: Engage Steady State
 1. Using the linear fit of the calibration data, we calculate the $K_p$ required for the target Q (e.g., 10k).
@@ -76,14 +79,14 @@ Configure the PID modules in your API. Note that PID 2 is skipped.
 | **Function** | Frequency Tracking | Active Damping | Amplitude Stability |
 | **Module Mode** | **PLL** | **PID** | **PID** |
 | **Input Source** | Demod 1 Phase | Demod 3 R (Amp) | Demod 4 R (Amp) |
-| **Setpoint** | Measured Phase at Resonance | 0.0 V | Target Amp (e.g., 0.1 V) |
+| **Setpoint** | Measured Phase at Resonance | 0.0 V | Target Amp (the measured R value at demod 4 |
 | **Output Channel**| Oscillator 1 Freq | Signal Output 2 Amp | Signal Output 1 Amp |
 | **Output Phase** | N/A | 90.0 deg (Crucial) | 0.0 deg |
 | **P-Gain (Kp)** | Adaptive & Sign-Dependent | Variable (Scan this) | Strictly Positive |
 | **I-Gain (Ki)** | Sign-Dependent | Zero | Strictly Positive (Slow) |
 | **D-Gain (Kd)** | Zero (Do not use) | Zero | Zero |
 
-> **Critical Note on PID Polarity:** If parasitic capacitance inverts the phase slope, we must invert the P and I gains for **PID 1 only**. The amplitude peak does not invert, so the gains for PID 3 (Q-Control) and PID 4 (AGC) must always retain their standard positive polarity.
+> **Critical Note on PID Polarity:** If parasitic capacitance inverts the phase slope, we must invert the P and I gains for **PID 1 only**. PID3 and PID4 normally use positive polarity, but verify the Q-control sign by checking that increasing Kp increases damping (shorter τ).
 
 ---
 
