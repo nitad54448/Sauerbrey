@@ -27,20 +27,27 @@ The Phase Locked Loop (PLL) must be engaged first and remain active continuously
 3. Apply your measured phase setpoint from Step 1 to PID 1.
 4. Enable PID 1 (in PLL). The lock-in will now continuously track the resonance frequency.
 
+
 ### Step 3: Q-Calibration & Scanning (PID 3)
-With the frequency locked, we must calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$).
+With the frequency locked, we must calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). During a ring-down, the resonator signal drops into the noise floor. If the PLL is left active, the phase discriminator will track this noise, causing the internal oscillator frequency to wander off resonance.
 1. Ensure PID 3 P-gain starts at 0.
 2. Define a safe $K_p$ scan array (e.g., 0.0 to 10.0).
 3. **For each $K_p$ value in the array:**
+
     * Apply $K_p$ to PID 3, **enable PID 3** (`pids/2/enable -> 1`), and wait 500 ms for the system to settle.
+    * **Freeze PLL:** Disable the PLL before the measurement. The oscillator will hold its output at the last known locked resonance frequency ($f_0$).
     * Subscribe to the Demod 2 data stream via software and begin polling (or use DAQ or scope ?).
     * Cut the drive signal (`sigouts/0/on -> 0`).
     * MEasure ~30 - 50 ms for the amplitude to ring down completely.
     * Restore the drive signal (`sigouts/0/on -> 1`) and stop polling.
     * **Disable PID 3** (`pids/2/enable -> 0`) before iterating to the next gain value.
+    * **Ring-Up Delay:** Wait approximately 3 to 5 times your estimated time constant ($\tau$) for the physical amplitude to stabilize.
+    * **Re-enable PLL:** Turn the PLL back on to snap back into phase lock. Checj that the PLL is locked before going to next step
+
     * **Safety Check:** If the amplitude grew instead of decaying, we have crossed the lasing threshold. Abort the scan and force PID 3 to 0.
     * Fit the valid decay curve to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
     * Verify that increasing Kp reduces ring-down time constant before proceeding.
+
 
 ### Step 4: Engage Steady State
 1. Using the linear fit of the calibration data, we calculate the $K_p$ required for the target Q (e.g., 10k).
@@ -109,7 +116,7 @@ Standard curve-fitting functions fail or become unstable if fed the pre-trigger 
 3. **Find the Knee (t0):** Calculate the difference between the adjacent slopes (delta_m = m2 - m1). Search the array for the index where this difference is maximized. This pinpoints the corner where the flatline drops into the steep exponential decay.
 4. **Slice & Zero:** Truncate the time and amplitude arrays starting from this index (or shift 5 to 10 points to the right to completely clear the filter's rounded shoulder). Subtract the first time value from the entire sliced time array so the pure decay fit starts at t=0.
 
-$$\text{Calculate Q: } Q = \pi \cdot f_0 \cdot \tau$$
+
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
 ### B. Calibration and Dynamic Safety Logic
