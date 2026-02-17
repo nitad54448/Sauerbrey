@@ -103,10 +103,22 @@ To extract the Q-factor, fit the amplitude envelope data from Demod 2 to:
 $$A(t) = A_0 \cdot e^{-t/\tau} + C$$
 
 **LabVIEW Array Truncation Logic:**
-Standard curve-fitting VIs fail if fed flatlines. You must isolate the decay curve:
+Standard curve-fitting VIs fail if fed flatlines. We must isolate the decay curve:
 1. **Find Trigger ($A_0$):** Average the first 100 samples to find the pre-trigger baseline. Search the array for the first index where amplitude drops below 95% of this baseline.
 2. **Find Noise Floor ($C$):** Average the final 10% of the array. Search for the first index where amplitude drops to within 1% of this floor.
 3. **Slice & Zero:** Truncate the time and amplitude arrays using these start/end indices. Subtract the first time value from the entire time array so the fit starts perfectly at $t=0$.
+
+
+### Robust Array Truncation via Derivative (Finding $t_0$)
+
+Instead of relying on a static 95% amplitude threshold to find the start of the decay, a more mathematically robust method is to locate the inflection point of the signal transition.
+
+1. **Calculate the Derivative:** Compute the discrete first derivative ($dA/dt$) of the Demod 2 amplitude array (or of the smoothed data).
+2. **Locate the Minimum:** Find the array index where this derivative reaches its absolute minimum (the most negative slope). 
+3. **Define $t_0$:** This index represents the steepest part of the signal drop-off, marking the exact moment the lock-in filter responds to the drive cut ($t_0$).
+4. **Slice the Array:** Truncate all data prior to this index. Subtract the time value at this new first index from the rest of the time array to force the pure decay curve to start perfectly at $t=0$.
+
+This derivative method is better suited to baseline noise and slow amplitude drifts, getting a true exponential envelope for a stable fit.
 
 $$\text{Calculate Q: } Q = \pi \cdot f_0 \cdot \tau$$
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
@@ -114,6 +126,8 @@ $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 ### B. Calibration and Safety Logic
 The relationship between PID 3 P-gain ($K_p$) and system damping ($\Gamma$) is linear:
 $$\Gamma(K_p) = \Gamma_{native} - \alpha \cdot K_p$$
+
+$$\Gamma_{native} and \alpha are obtained from fit K_p$$
 
 To hit a specific target Q, solve for $K_{p,target}$:
 $$K_{p,target} = \frac{\Gamma_{native} - \frac{\pi \cdot f_0}{Q_{target}}}{\alpha}$$
