@@ -41,10 +41,10 @@ With the frequency locked, we must calibrate the relationship between the Q-Cont
     * MEasure ~30 - 50 ms for the amplitude to ring down completely.
     * Restore the drive signal (`sigouts/0/on -> 1`) and stop polling.
     * **Disable PID 3** (`pids/2/enable -> 0`) before iterating to the next gain value.
-    * **Ring-Up Delay:** Wait approximately 3 to 5 times your estimated time constant ($\tau$) for the physical amplitude to stabilize.
-    * **Re-enable PLL:** Turn the PLL back on to snap back into phase lock. Checj that the PLL is locked before going to next step
+    * Wait approximately 3 to 5 times the time constant ($\tau$) for the physical amplitude to stabilize; 10 msec is enough
+    * Turn the PLL ON to (hopefully) snap back into phase lock. Checj that the PLL is locked before going to next step.
 
-    * **Safety Check:** If the amplitude grew instead of decaying, we have crossed the lasing threshold. Abort the scan and force PID 3 to 0.
+    * **Safety Check:** If the amplitude increase instead of decaying, we have crossed the lasing threshold. Abort the scan and force PID 3 to 0. Note : in the v3 of the program, an estimate of the lasing limit is made before increasing too much the Kp.
     * Fit the valid decay curve to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
     * Verify that increasing Kp reduces ring-down time constant before proceeding.
 
