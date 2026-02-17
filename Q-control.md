@@ -112,20 +112,28 @@ Standard curve-fitting functions fail or become unstable if fed the pre-trigger 
 $$\text{Calculate Q: } Q = \pi \cdot f_0 \cdot \tau$$
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
-### B. Calibration and Safety Logic
-The relationship between PID 3 P-gain ($K_p$) and system damping ($\Gamma$) is linear:
-$$\Gamma(K_p) = \Gamma_{native} - \alpha \cdot K_p$$
+### B. Calibration and Dynamic Safety Logic
 
+The relationship between PID 3 P-gain (Kp) and system damping (Γ) is linear:
+Γ(Kp) = Γ_native - α * Kp
 
-To hit a specific target Q, solve for $K_{p,target}$:
-$$K_{p,target} = \frac{\Gamma_{native} - \frac{\pi \cdot f_0}{Q_{target}}}{\alpha}$$
+Where Γ_native (the intercept) and α (the slope) are obtained by fitting the extracted damping rates against the scanned Kp values.
 
-**Lasing Threshold:** If $K_p$ is set too high, total damping becomes negative, causing amplitude to grow exponentially (Lasing). 
-* Calculate maximum safe gain: $K_{p,max} = \frac{\Gamma_{native}}{\alpha}$.
-* Apply hardware limits (`pids/2/limitlower` and `limitupper`) to $\pm 0.5$ V to prevent damage.
+**Dynamic Lasing Threshold Estimation:**
+If Kp is set too high, the total damping becomes negative, causing the amplitude to grow exponentially (Lasing). To avoid blindly stepping into this dangerous regime during an automated scan:
+1. Measure the natural damping Γ_native at Kp = 0.
+2. Perform 2 to 3 initial ring-downs at small, strictly safe Kp increments (e.g., 0.5, 1.0).
+3. Calculate a preliminary linear fit on these initial points to estimate the coupling slope (α).
+4. Dynamically predict the maximum safe gain: Kp_max = Γ_native / α.
+5. Programmatically limit the remainder of your Kp scan array to stay safely below this threshold (e.g., cap the maximum scan value at 80% or 90% of Kp_max).
 
+**Reaching the Target Q:**
+Once the fully bounded scan is complete and your final α is accurately fitted, calculate the exact Kp required for your target Q:
+Kp_target = [ Γ_native - (π * f0 / Q_target) ] / α
 
----
+**Hardware Limits (Fail-Safe):**
+Even with dynamic prediction, always apply the hardware limits (`pids/2/limitlower` and `limitupper`) to ±0.5 V. This acts as a hard physical fail-safe to prevent damage if the initial slope estimate slightly overshoots.
+
 ---
 
 ## Demodulator Settings for HIPIMS DAQ Operation
