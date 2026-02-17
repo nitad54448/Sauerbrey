@@ -116,7 +116,6 @@ $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 The relationship between PID 3 P-gain ($K_p$) and system damping ($\Gamma$) is linear:
 $$\Gamma(K_p) = \Gamma_{native} - \alpha \cdot K_p$$
 
-$$\Gamma_{native} and \alpha are obtained from fit K_p $$
 
 To hit a specific target Q, solve for $K_{p,target}$:
 $$K_{p,target} = \frac{\Gamma_{native} - \frac{\pi \cdot f_0}{Q_{target}}}{\alpha}$$
