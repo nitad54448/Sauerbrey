@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TDMS Reader</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0b0c0f;
+    --surface: #13151a;
+    --surface2: #1c1f27;
+    --border: #2a2d38;
+    --accent: #00e5a0;
+    --accent2: #0077ff;
+    --text: #e8eaf0;
+    --muted: #5a5f72;
+    --error: #ff4d6a;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+
+  header { padding: 20px 32px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; background: var(--surface); }
+  header .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  header .logo span { color: var(--accent); }
+  header .badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; background: #00e5a015; border: 1px solid #00e5a040; color: var(--accent); padding: 3px 8px; border-radius: 4px; letter-spacing: 1px; }
+  #newFileBtn { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; display: none; transition: all 0.15s; }
+  #newFileBtn:hover { color: var(--text); border-color: var(--accent); }
+
+  .main { flex: 1; display: flex; flex-direction: column; padding: 28px 32px; gap: 20px; max-width: 1500px; width: 100%; margin: 0 auto; }
+
+  #dropzone { border: 2px dashed var(--border); border-radius: 16px; padding: 60px 32px; text-align: center; cursor: pointer; transition: all 0.25s ease; background: var(--surface); position: relative; overflow: hidden; }
+  #dropzone::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, #00e5a008 0%, transparent 70%); pointer-events: none; }
+  #dropzone:hover, #dropzone.drag-over { border-color: var(--accent); background: #00e5a008; }
+  #dropzone .icon { font-size: 44px; margin-bottom: 14px; display: block; }
+  #dropzone h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  #dropzone p { color: var(--muted); font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+  #fileInput { display: none; }
+
+  #statusBar { display: none; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 8px var(--accent); }
+  .dot.error { background: var(--error); box-shadow: 0 0 8px var(--error); }
+  .dot.loading { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  #statsArea { margin-left: auto; color: var(--muted); display: flex; gap: 20px; }
+  #statsArea span { color: var(--text); }
+
+  #content { display: none; gap: 20px; flex: 1; }
+  #content.visible { display: flex; }
+  .panel-row { display: grid; grid-template-columns: 280px 1fr; gap: 20px; flex: 1; min-height: 500px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 10px; font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; }
+  .panel-header .count { background: var(--surface2); color: var(--accent); padding: 2px 8px; border-radius: 20px; font-size: 10px; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 6px; }
+  .panel-body::-webkit-scrollbar { width: 5px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .group-node { margin-bottom: 2px; }
+  .group-label { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text); transition: background 0.15s; user-select: none; }
+  .group-label:hover { background: var(--surface2); }
+  .group-label .arrow { color: var(--muted); font-size: 10px; transition: transform 0.2s; flex-shrink: 0; }
+  .group-label.open .arrow { transform: rotate(90deg); }
+  .group-label .g-icon { color: var(--accent2); flex-shrink: 0; }
+  .group-label .ch-count { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); flex-shrink: 0; }
+  .channels-list { padding-left: 14px; display: none; }
+  .channels-list.open { display: block; }
+  .channel-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); transition: all 0.15s; border: 1px solid transparent; margin-bottom: 1px; }
+  .channel-item:hover { background: var(--surface2); color: var(--text); }
+  .channel-item.active { background: #00e5a012; border-color: #00e5a030; color: var(--accent); }
+  .channel-item .c-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .channel-item.active .c-dot { background: var(--accent); }
+  .channel-item .dtype { margin-left: auto; font-size: 9px; color: var(--muted); background: var(--surface2); padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+
+  .data-panel { flex: 1; display: flex; flex-direction: column; }
+  .tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
+  .tab { padding: 7px 14px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); cursor: pointer; border-radius: 6px 6px 0 0; border: 1px solid transparent; border-bottom: none; transition: all 0.15s; user-select: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--accent); }
+  .tab-content { display: none; flex: 1; overflow: auto; padding: 14px; }
+  .tab-content.active { display: block; }
+  .tab-content::-webkit-scrollbar { width: 5px; }
+  .tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .props-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+  .props-table th { text-align: left; padding: 7px 12px; color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  .props-table td { padding: 7px 12px; border-bottom: 1px solid #1a1d24; vertical-align: top; }
+  .props-table tr:hover td { background: var(--surface2); }
+  .props-table .key { color: var(--accent2); }
+  .props-table .val { color: var(--text); word-break: break-all; }
+  .props-table .tcell { color: var(--muted); font-size: 10px; }
+
+  .values-wrap { overflow: auto; }
+  .values-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+  .values-table th { position: sticky; top: 0; background: var(--surface); padding: 7px 12px; color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); z-index: 1; }
+  .values-table th:first-child { text-align: left; width: 70px; }
+  .values-table td { padding: 5px 12px; border-bottom: 1px solid #1a1d24; }
+  .values-table td:first-child { color: var(--muted); }
+  .values-table tr:hover td { background: var(--surface2); }
+  .num { color: var(--accent); }
+  .str { color: #f0c040; }
+
+  .truncate-note { text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 10px; border-top: 1px solid var(--border); margin-top: 8px; }
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px; gap: 10px; }
+  .empty-state .big { font-size: 30px; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .stat-card .label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-card .value { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: var(--accent); font-weight: 700; }
+  .stat-card .value.blue { color: var(--accent2); }
+  .stat-card .value.white { color: var(--text); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">TDMS<span>.</span>reader</div>
+  <div class="badge">PURE JS · NO DEPS</div>
+  <button id="csvBtn" onclick="exportCSV()" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;background:#00e5a018;border:1px solid #00e5a050;color:var(--accent);padding:6px 14px;border-radius:6px;cursor:pointer;display:none;transition:all 0.15s;" onmouseover="this.style.background='#00e5a030'" onmouseout="this.style.background='#00e5a018'">↓ Export CSV</button>
+  <button id="newFileBtn" onclick="resetUI()">↩ Open another file</button>
+</header>
+
+<div class="main">
+  <div id="dropzone">
+    <span class="icon">📂</span>
+    <h2>Drop your TDMS file here</h2>
+    <p>or click to browse · parsed entirely in-browser · no data leaves your machine</p>
+    <input type="file" id="fileInput" accept=".tdms">
+  </div>
+
+  <div id="statusBar">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText"></span>
+    <div id="statsArea"></div>
+  </div>
+
+  <div id="content">
+    <div class="panel-row">
+      <div class="panel">
+        <div class="panel-header">Structure <span class="count" id="groupCount">—</span></div>
+        <div class="panel-body" id="treeContainer"></div>
+      </div>
+      <div class="panel data-panel">
+        <div class="tabs">
+          <div class="tab active" data-tab="values">Values</div>
+          <div class="tab" data-tab="props">Properties</div>
+          <div class="tab" data-tab="info">Channel Info</div>
+        </div>
+        <div class="tab-content active" id="tab-values"><div class="empty-state"><span class="big">⟵</span>Select a channel</div></div>
+        <div class="tab-content" id="tab-props"><div class="empty-state"><span class="big">⟵</span>Select a channel</div></div>
+        <div class="tab-content" id="tab-info"><div class="empty-state"><span class="big">⟵</span>Select a channel</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+//  TDMS Parser
+//
+//  Key structural insight (validated against real NI files):
+//  The raw data index block (rawIdx bytes) contains:
+//    dtype(4) + arrayDim(4) + numValues(8) [+ totalBytes(8) if string] + numProps(4)
+//  numProps is the LAST field INSIDE the rawIdx block — NOT a separate field after it.
+//  After reading the known fields, numProps is read directly (no skip to idx_start+rawIdx).
+// ═══════════════════════════════════════════════════════════════════════
+
+const DTYPE_INFO = {
+  1:    { name: 'i8',        size: 1  },
+  2:    { name: 'i16',       size: 2  },
+  3:    { name: 'i32',       size: 4  },
+  4:    { name: 'i64',       size: 8  },
+  5:    { name: 'u8',        size: 1  },
+  6:    { name: 'u16',       size: 2  },
+  7:    { name: 'u32',       size: 4  },
+  8:    { name: 'u64',       size: 8  },
+  9:    { name: 'float32',   size: 4  },
+  10:   { name: 'float64',   size: 8  },
+  11:   { name: 'extended',  size: 10 },
+  0x20: { name: 'string',    size: -1 },
+  0x21: { name: 'boolean',   size: 1  },
+  0x44: { name: 'timestamp', size: 16 },
+};
+
+function parseTDMS(buffer) {
+  const u8  = new Uint8Array(buffer);
+  const dv  = new DataView(buffer);
+  const dec = new TextDecoder('utf-8');
+  const objects = {}; // path → { properties, rawDataInfo, values }
+
+  // ── read helpers (little-endian, cursor-based) ──
+  let p = 0;
+  const rdU8   = ()  => u8[p++];
+  const rdU16  = ()  => { const v=dv.getUint16(p,true);  p+=2; return v; };
+  const rdI16  = ()  => { const v=dv.getInt16(p,true);   p+=2; return v; };
+  const rdU32  = ()  => { const v=dv.getUint32(p,true);  p+=4; return v; };
+  const rdI32  = ()  => { const v=dv.getInt32(p,true);   p+=4; return v; };
+  const rdF32  = ()  => { const v=dv.getFloat32(p,true); p+=4; return v; };
+  const rdF64  = ()  => { const v=dv.getFloat64(p,true); p+=8; return v; };
+  const rdU64n = ()  => { const v=Number(dv.getBigUint64(p,true)); p+=8; return v; };
+  const rdStr  = ()  => { const l=rdU32(); const s=dec.decode(u8.subarray(p,p+l)); p+=l; return s; };
+  const rdTS   = ()  => {
+    const secLo=dv.getUint32(p+8,true), secHi=dv.getInt32(p+12,true);
+    p+=16;
+    return new Date((secHi*4294967296+secLo-2082844800)*1000).toISOString();
+  };
+
+  function rdPropVal(dtype) {
+    switch(dtype) {
+      case 1:    return rdU8() << 0 | 0;  // sign-extend
+      case 2:    return rdI16();
+      case 3:    return rdI32();
+      case 4:    return rdU64n();
+      case 5:    return rdU8();
+      case 6:    return rdU16();
+      case 7:    return rdU32();
+      case 8:    return rdU64n();
+      case 9:    return rdF32();
+      case 10:   return rdF64();
+      case 0x20: return rdStr();
+      case 0x21: return rdU8() !== 0;
+      case 0x44: return rdTS();
+      default:   return `[0x${dtype.toString(16)}]`;
+    }
+  }
+
+  function rdRawVal(dtype, dpos, le) {
+    switch(dtype) {
+      case 1:    return dv.getInt8(dpos);
+      case 2:    return dv.getInt16(dpos,le);
+      case 3:    return dv.getInt32(dpos,le);
+      case 4:    { const lo=dv.getUint32(dpos,le),hi=dv.getInt32(dpos+4,le); return hi*4294967296+lo; }
+      case 5:    return dv.getUint8(dpos);
+      case 6:    return dv.getUint16(dpos,le);
+      case 7:    return dv.getUint32(dpos,le);
+      case 8:    { const lo=dv.getUint32(dpos,le),hi=dv.getUint32(dpos+4,le); return hi*4294967296+lo; }
+      case 9:    return dv.getFloat32(dpos,le);
+      case 10:   return dv.getFloat64(dpos,le);
+      case 0x21: return dv.getUint8(dpos) !== 0;
+      case 0x44: {
+        const secLo=dv.getUint32(dpos+8,le), secHi=dv.getInt32(dpos+12,le);
+        return new Date((secHi*4294967296+secLo-2082844800)*1000).toISOString();
+      }
+      default: return null;
+    }
+  }
+
+  // ── Segment loop ──
+  let segStart = 0;
+  while (segStart + 28 <= buffer.byteLength) {
+    // Check for 'TDSm' or 'TDSh' (index file) tag
+    const tag0=u8[segStart],tag1=u8[segStart+1],tag2=u8[segStart+2],tag3=u8[segStart+3];
+    const isTDSm = tag0===0x54&&tag1===0x44&&tag2===0x53&&tag3===0x6D;
+    const isTDSh = tag0===0x54&&tag1===0x44&&tag2===0x53&&tag3===0x68;
+    if (!isTDSm && !isTDSh) break;
+
+    const toc        = dv.getUint32(segStart+4, true);
+    const nextSegOff = Number(dv.getBigUint64(segStart+12, true));
+    const rawDataOff = Number(dv.getBigUint64(segStart+20, true));
+
+    const leadInEnd  = segStart + 28;
+    const dataStart  = leadInEnd + rawDataOff;
+    const nextSegPos = nextSegOff === 0xFFFFFFFFFFFFFFFF ? buffer.byteLength : leadInEnd + nextSegOff;
+    const dataEnd    = Math.min(nextSegPos, buffer.byteLength);
+
+    const hasMeta        = (toc & 0x02) !== 0;
+    const hasRaw         = (toc & 0x08) !== 0;
+    const isInterleaved  = (toc & 0x20) !== 0;
+    const isBigEndian    = (toc & 0x40) !== 0;
+    const le             = !isBigEndian;
+
+    const segActiveObjs = []; // ordered list of objects with raw data this segment
+
+    // ── Parse metadata ──
+    if (hasMeta) {
+      p = leadInEnd;
+      const numObjects = rdU32();
+
+      for (let oi = 0; oi < numObjects; oi++) {
+        const path   = rdStr();
+        const rawIdx = rdU32(); // byte length of raw data index block that follows
+
+        if (!objects[path]) objects[path] = { properties:{}, rawDataInfo:null, values:[] };
+
+        let ri = objects[path].rawDataInfo; // carry forward by default
+
+        if (rawIdx === 0xFFFFFFFF) {
+          // No raw data for this object in this segment
+          ri = null;
+          // Still need to read numProps (it comes right after rawIdx when no index block)
+          const numProps = rdU32();
+          for (let pi=0; pi<numProps; pi++) {
+            const pname = rdStr();
+            const ptype = rdU32();
+            const pval  = rdPropVal(ptype);
+            objects[path].properties[pname] = { value: pval, type: DTYPE_INFO[ptype]?.name || `0x${ptype.toString(16)}` };
+          }
+          objects[path].rawDataInfo = null;
+          continue; // don't add to segActiveObjs
+        }
+
+        if (rawIdx === 0x00000000) {
+          // Same raw data layout as previous segment — ri unchanged, no index to read
+          // numProps follows immediately
+          const numProps = rdU32();
+          for (let pi=0; pi<numProps; pi++) {
+            const pname = rdStr();
+            const ptype = rdU32();
+            const pval  = rdPropVal(ptype);
+            objects[path].properties[pname] = { value: pval, type: DTYPE_INFO[ptype]?.name || `0x${ptype.toString(16)}` };
+          }
+          if (ri) segActiveObjs.push({ path, ri });
+          continue;
+        }
+
+        // New raw data index: read fields directly (numProps is the LAST field inside rawIdx)
+        const dtype = rdU32();
+        const dim   = rdU32(); // always 1
+        const nvals = rdU64n();
+        let totalBytes = 0;
+        if (dtype === 0x20) totalBytes = rdU64n(); // string type: total byte count
+
+        // numProps is the last u32 inside the rawIdx block
+        const numProps = rdU32();
+
+        ri = { dtype, nvals, totalBytes };
+        objects[path].rawDataInfo = ri;
+        segActiveObjs.push({ path, ri });
+
+        // Properties follow immediately after rawIdx block
+        for (let pi=0; pi<numProps; pi++) {
+          const pname = rdStr();
+          const ptype = rdU32();
+          const pval  = rdPropVal(ptype);
+          objects[path].properties[pname] = { value: pval, type: DTYPE_INFO[ptype]?.name || `0x${ptype.toString(16)}` };
+        }
+      }
+    }
+
+    // ── Parse raw data ──
+    if (hasRaw && segActiveObjs.length > 0) {
+      if (!isInterleaved) {
+        // Contiguous layout: all values of obj0, then obj1, …
+        let dpos = dataStart;
+        for (const { path, ri } of segActiveObjs) {
+          const { dtype, nvals, totalBytes } = ri;
+
+          if (dtype === 0x20) {
+            // String: [nvals × u32 end-offsets] then [raw string bytes]
+            const strDataStart = dpos + nvals * 4;
+            let prev = 0;
+            for (let i=0; i<nvals; i++) {
+              const endOff = dv.getUint32(dpos + i*4, true);
+              objects[path].values.push(dec.decode(u8.subarray(strDataStart+prev, strDataStart+endOff)));
+              prev = endOff;
+            }
+            dpos += totalBytes;
+          } else {
+            const sz = DTYPE_INFO[dtype]?.size;
+            if (!sz || sz <= 0) continue;
+            for (let i=0; i<nvals; i++) {
+              if (dpos + sz > dataEnd) break;
+              const v = rdRawVal(dtype, dpos, le);
+              if (v !== null) objects[path].values.push(v);
+              dpos += sz;
+            }
+          }
+        }
+      } else {
+        // Interleaved: one sample of each object per cycle
+        const cycleSize = segActiveObjs.reduce((acc, {ri}) => {
+          const sz = DTYPE_INFO[ri.dtype]?.size || 0;
+          return acc + Math.max(sz, 0);
+        }, 0);
+        if (cycleSize > 0) {
+          let dpos = dataStart;
+          while (dpos + cycleSize <= dataEnd) {
+            for (const { path, ri } of segActiveObjs) {
+              const sz = DTYPE_INFO[ri.dtype]?.size;
+              if (!sz || sz <= 0) continue;
+              const v = rdRawVal(ri.dtype, dpos, le);
+              if (v !== null) objects[path].values.push(v);
+              dpos += sz;
+            }
+          }
+        }
+      }
+    }
+
+    segStart = nextSegPos;
+    if (segStart >= buffer.byteLength) break;
+  }
+
+  return objects;
+}
+
+// ── Group/channel structure ──
+// TDMS paths look like: /  /'groupName'  /'groupName'/'channelName'
+function parsePaths(objects) {
+  const groups = {};
+  for (const [path, obj] of Object.entries(objects)) {
+    const m = path.match(/^\/'([^']+)'(?:\/'([^']+)')?$|^\/$/);
+    if (!m) continue;
+    const gName = m[1] || '(root)', cName = m[2] || null;
+    if (!groups[gName]) groups[gName] = { groupObj:null, channels:{} };
+    if (cName) groups[gName].channels[cName] = { path, obj };
+    else groups[gName].groupObj = obj;
+  }
+  return groups;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  UI
+// ═══════════════════════════════════════════════════════════════════════
+
+let parsedGroups = {};
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showStatus(msg, state='ok', stats=null) {
+  document.getElementById('statusBar').style.display = 'flex';
+  document.getElementById('statusDot').className = 'dot '+state;
+  document.getElementById('statusText').textContent = msg;
+  const sa = document.getElementById('statsArea');
+  sa.innerHTML = stats ? stats.map(s=>`<span style="color:var(--muted)">${s.label}:&nbsp;</span><span>${s.val}</span>`).join('') : '';
+}
+
+function buildTree(groups) {
+  const container = document.getElementById('treeContainer');
+  container.innerHTML = '';
+  const gNames = Object.keys(groups);
+  document.getElementById('groupCount').textContent = gNames.length+' group'+(gNames.length!==1?'s':'');
+
+  for (const gName of gNames) {
+    const g = groups[gName];
+    const cNames = Object.keys(g.channels);
+    const node  = document.createElement('div'); node.className='group-node';
+    const label = document.createElement('div'); label.className='group-label';
+    label.innerHTML = `<span class="arrow">▶</span><span class="g-icon">▤</span>${esc(gName)}<span class="ch-count">${cNames.length} ch</span>`;
+    const chList = document.createElement('div'); chList.className='channels-list';
+    label.addEventListener('click', ()=>{ label.classList.toggle('open'); chList.classList.toggle('open'); });
+
+    for (const cName of cNames) {
+      const ch  = g.channels[cName];
+      const dt  = DTYPE_INFO[ch.obj.rawDataInfo?.dtype]?.name||'—';
+      const item = document.createElement('div');
+      item.className='channel-item'; item.dataset.path=ch.path;
+      item.innerHTML=`<span class="c-dot"></span>${esc(cName)}<span class="dtype">${dt}</span>`;
+      item.addEventListener('click', ()=>selectChannel(ch.path, gName, cName, ch.obj));
+      chList.appendChild(item);
+    }
+    node.appendChild(label); node.appendChild(chList); container.appendChild(node);
+  }
+
+  // Auto-open first group, select first channel
+  const firstG = gNames[0];
+  if (firstG) {
+    container.querySelector('.group-label')?.classList.add('open');
+    container.querySelector('.channels-list')?.classList.add('open');
+    const firstCh = Object.entries(groups[firstG].channels)[0];
+    if (firstCh) selectChannel(firstCh[1].path, firstG, firstCh[0], firstCh[1].obj);
+  }
+}
+
+function selectChannel(path, gName, cName, obj) {
+  document.querySelectorAll('.channel-item').forEach(el=>el.classList.remove('active'));
+  document.querySelector(`.channel-item[data-path="${CSS.escape(path)}"]`)?.classList.add('active');
+
+  const values = obj.values||[];
+  const props  = obj.properties||{};
+  const ri     = obj.rawDataInfo;
+  const dtype  = DTYPE_INFO[ri?.dtype]?.name||'—';
+  const MAX    = 10000;
+
+  // Values tab
+  const valTab = document.getElementById('tab-values');
+  if (values.length===0) {
+    valTab.innerHTML='<div class="empty-state"><span class="big">∅</span>No raw data in this channel</div>';
+  } else {
+    const shown = values.slice(0,MAX);
+    let html='<div class="values-wrap"><table class="values-table"><thead><tr><th>#</th><th>Value</th></tr></thead><tbody>';
+    for (let i=0;i<shown.length;i++) {
+      const v=shown[i];
+      const cls=typeof v==='number'?'num':'str';
+      const d=typeof v==='number'?(Number.isInteger(v)?v:+v.toPrecision(10)):v;
+      html+=`<tr><td>${i}</td><td class="${cls}">${esc(String(d))}</td></tr>`;
+    }
+    html+='</tbody></table></div>';
+    if (values.length>MAX) html+=`<div class="truncate-note">Showing ${MAX.toLocaleString()} of ${values.length.toLocaleString()} values</div>`;
+    valTab.innerHTML=html;
+  }
+
+  // Props tab
+  const propsTab = document.getElementById('tab-props');
+  const pKeys = Object.keys(props);
+  if (pKeys.length===0) {
+    propsTab.innerHTML='<div class="empty-state"><span class="big">∅</span>No properties</div>';
+  } else {
+    let html='<table class="props-table"><thead><tr><th>Property</th><th>Value</th><th>Type</th></tr></thead><tbody>';
+    for (const k of pKeys)
+      html+=`<tr><td class="key">${esc(k)}</td><td class="val">${esc(String(props[k].value))}</td><td class="tcell">${esc(props[k].type)}</td></tr>`;
+    propsTab.innerHTML=html+'</tbody></table>';
+  }
+
+  // Info tab
+  const infoTab = document.getElementById('tab-info');
+  const numVals = values.filter(v=>typeof v==='number');
+  const hasStats= numVals.length>0;
+  const minV    = hasStats?Math.min(...numVals):null;
+  const maxV    = hasStats?Math.max(...numVals):null;
+  const meanV   = hasStats?numVals.reduce((a,b)=>a+b,0)/numVals.length:null;
+  const stdV    = hasStats?Math.sqrt(numVals.reduce((a,b)=>a+(b-meanV)**2,0)/numVals.length):null;
+
+  infoTab.innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">Samples</div><div class="value">${values.length.toLocaleString()}</div></div>
+      <div class="stat-card"><div class="label">Data Type</div><div class="value blue">${dtype}</div></div>
+      <div class="stat-card"><div class="label">Group</div><div class="value white">${esc(gName)}</div></div>
+      <div class="stat-card"><div class="label">Properties</div><div class="value">${pKeys.length}</div></div>
+      ${hasStats?`
+      <div class="stat-card"><div class="label">Min</div><div class="value blue">${minV.toPrecision(7)}</div></div>
+      <div class="stat-card"><div class="label">Max</div><div class="value blue">${maxV.toPrecision(7)}</div></div>
+      <div class="stat-card"><div class="label">Mean</div><div class="value">${meanV.toPrecision(8)}</div></div>
+      <div class="stat-card"><div class="label">Std Dev</div><div class="value">${stdV.toPrecision(6)}</div></div>`:''}
+    </div>
+    <table class="props-table"><thead><tr><th>Field</th><th>Detail</th></tr></thead><tbody>
+      <tr><td class="key">path</td><td class="val">${esc(path)}</td></tr>
+      <tr><td class="key">channel</td><td class="val">${esc(cName)}</td></tr>
+      <tr><td class="key">group</td><td class="val">${esc(gName)}</td></tr>
+    </tbody></table>`;
+}
+
+async function exportCSV() {
+  // Collect all channels across all groups, in order
+  const columns = []; // { header, values }
+  for (const [gName, g] of Object.entries(parsedGroups)) {
+    for (const [cName, ch] of Object.entries(g.channels)) {
+      if (ch.obj.values.length > 0) {
+        columns.push({ header: `${gName}/${cName}`, values: ch.obj.values });
+      }
+    }
+  }
+  if (columns.length === 0) { alert('No channel data to export.'); return; }
+
+  const numRows = Math.max(...columns.map(c => c.values.length));
+
+  // Build CSV string
+  const lines = [];
+  // Header row
+  lines.push(columns.map(c => csvCell(c.header)).join(','));
+  // Data rows
+  for (let i = 0; i < numRows; i++) {
+    lines.push(columns.map(c => i < c.values.length ? csvCell(c.values[i]) : '').join(','));
+  }
+
+  const csvContent = lines.join('\r\n');
+  const defaultName = (document.getElementById('statusText').textContent || 'export').replace(/\.tdms$/i,'') + '.csv';
+
+  // Use modern File System Access API if available (lets user pick name + location)
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: defaultName,
+        types: [{ description: 'CSV file', accept: { 'text/csv': ['.csv'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(csvContent);
+      await writable.close();
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return; // user cancelled
+      // fall through to legacy method
+    }
+  }
+
+  // Fallback: trigger download (no location picker, but default name is set)
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = defaultName; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(v) {
+  const s = String(v);
+  // Quote if contains comma, quote, or newline
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function resetUI() {
+  document.getElementById('dropzone').style.display='';
+  document.getElementById('content').style.display='none';
+  document.getElementById('statusBar').style.display='none';
+  document.getElementById('newFileBtn').style.display='none';
+  document.getElementById('csvBtn').style.display='none';
+  document.getElementById('treeContainer').innerHTML='';
+  document.getElementById('fileInput').value='';
+}
+
+function handleFile(file) {
+  if (!file) return;
+  showStatus(`Reading ${file.name}…`, 'loading');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const t0 = performance.now();
+      const objects = parseTDMS(e.target.result);
+      const t1 = performance.now();
+
+      parsedGroups = parsePaths(objects);
+      const gCount = Object.keys(parsedGroups).length;
+      const cCount = Object.values(parsedGroups).reduce((s,g)=>s+Object.keys(g.channels).length,0);
+      const samples= Object.values(objects).reduce((s,o)=>s+(o.values?.length||0),0);
+
+      showStatus(file.name, 'ok', [
+        {label:'Groups',   val:gCount},
+        {label:'Channels', val:cCount},
+        {label:'Samples',  val:samples.toLocaleString()},
+        {label:'Time',     val:`${(t1-t0).toFixed(1)}ms`},
+      ]);
+
+      buildTree(parsedGroups);
+      document.getElementById('dropzone').style.display='none';
+      document.getElementById('content').style.display='flex';
+      document.getElementById('newFileBtn').style.display='block';
+      document.getElementById('csvBtn').style.display='block';
+
+    } catch(err) {
+      showStatus('Parse error: '+err.message, 'error');
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+const dz = document.getElementById('dropzone');
+dz.addEventListener('click',  ()=>document.getElementById('fileInput').click());
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('drag-over');});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('drag-over');handleFile(e.dataTransfer.files[0]);});
+document.getElementById('fileInput').addEventListener('change', e=>handleFile(e.target.files[0]));
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
