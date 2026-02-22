@@ -26,7 +26,7 @@ Before engaging any control loops, we must find the natural state of the QCM.
 2. Apply the polarity rule: If your phase slope is Normal, use Negative P and I gains (those given by Advisor). If it is Inverted, use Positive P and I gains. **D-Gain is always 0.**
 3. Apply your measured phase setpoint from Step 1 to PID 1.
 4. Enable PID 1 (in PLL). The lock-in will now continuously track the resonance frequency (for measuring during the deposition increase the lowlimit value). The Phase Locked Loop (PLL) must remain active. If PLL is lost, check the BW parameters, cables, noise ?
-
+5. Set the osc 2 to the same frequency as osc 1: ('/oscs/1/freq', value).
 
 ### Step 3: Q-Calibration & Scanning (PID 3)
 With the frequency locked, we must calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By stepping the drive amplitude to half (or maybe 33%, need to test this), the resonator undergoes a transient decay to a new steady state. Because the signal never drops into the noise floor, the PLL should remain locked throughout the measurement.
