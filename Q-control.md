@@ -49,11 +49,28 @@ With the frequency locked, we must calibrate the relationship between the Q-Cont
 
 
 ### Step 4: Engage Steady State
-1. Using the linear fit of the calibration data, we calculate the $K_p$ required for the target Q (e.g., 10k).
-2. Apply this final $K_p$ to PID 3 and **enable PID 3 permanently** (`pids/2/enable -> 1`). The resonator should now actively be damped.
-3. **Scale the PLL:** Because lowering the Q widens the bandwidth and alters the phase slope, scale the PID 1 gains to maintain stability: $P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$.
-4. **Engage AGC:** **Enable PID 4** (`pids/3/enable -> 1`) to adjust the drive voltage and keep the amplitude stable at the target setpoint.
-5. Begin the mass-loading experiment, logging the Oscillator 1 frequency continuously.
+Once your calibration scan is complete and we have the linear fit parameters ($\Gamma_{native}$ and $\alpha$), we can lock the system into its new Q-state.
+
+**1. Calculate and Apply Final Q-Control Gain**
+Calculate the exact $K_p$ required for the desired target Q:
+$K_{p\_target} = \frac{\Gamma_{native} - (\pi \cdot f_0 / Q_{target})}{\alpha}$
+* Push this value to PID 3: `/{dev}/pids/2/p` -> $K_{p\_target}$
+* Enable PID 3 permanently: `/{dev}/pids/2/enable` -> `1`
+
+**2. Scale the PLL (Crucial for Stability)**
+Lowering the Q-factor actively widens the resonance bandwidth and flattens the phase slope. We need to adjust the PLL, it will become sluggish or unstable.
+Scale the PID 1 Proportional gain based on the Q-reduction ratio:
+$P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$
+* Update PID 1 P-gain: `/{dev}/pids/0/p` -> $P_{new}$
+Note: maybe we need to change also the BW of PID1 (aka timeconstant of demod 1) to adapt to this new widen resonance ?
+
+**3. Engage the AGC**
+Now that the active damping is pulling the amplitude down, turn on the AGC to automatically adjust the drive voltage and hold the amplitude at your target setpoint.
+* Enable PID 4: `/{dev}/pids/3/enable` -> `1`
+
+**4. Begin Experiment**
+The multi-loop system is now fully locked. You can begin mass-loading experiments, continuously logging the Oscillator 1 frequency.
+
 
 ---
 
@@ -68,7 +85,7 @@ With the frequency locked, we must calibrate the relationship between the Q-Cont
 ### A. Hardware Wiring & Output Routing
 * **Input Signal (`Signal Input 1`):** Resonator response. Feeds all four Demods.
 * **Drive Output (`Signal Output 1`):** Main excitation, controlled by PID 4 (AGC). Set Phase to 0.0 deg. Routed to Oscillator 1.
-* **Q-Feedback (`Signal Output 2`):** Feedback force, controlled by PID 3 (Q-Control) (set demod 3 to 90.0 deg). **Must be explicitly routed to Oscillator 1.**
+* **Q-Feedback (`Signal Output 2`):** Feedback force, controlled by PID 3 (Q-Control) (set demod 3 phase to 90.0 deg). **Must be explicitly routed to Oscillator 1.**
 
 > **Hardware:** Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece before connecting to the resonator.
 
@@ -93,7 +110,7 @@ Configure the PID modules below. PID 2 is skipped.
 | **Target BW** | `10` to `50` Hz | Scan dependent | Slow (e.g., `< 10` Hz) |
 | **Module Mode** | **PLL** | **PID** | **PID** |
 | **Input Node** | `.../input` (Demod 1 Phase) | `.../input` (Demod 3 R) | `.../input` (Demod 4 R) |
-| **Setpoint**| `.../setpoint` (Resonance Phase) | `.../setpoint` -> `0.0` | `.../setpoint` (Target Amp, measure amplitude at resonance before applying Q) |
+| **Setpoint**| `.../setpoint` (Resonance Phase) | `.../setpoint` -> `0.0` | `.../setpoint` (Target Amp, measured amplitude at resonance before applying Q) |
 | **Output Node** | `.../output` (Osc 1 Freq) | `.../output` (SigOut 2 Amp) | `.../output` (SigOut 1 Amp) |
 | **P-Gain (Kp)** | `.../p` (Sign-Dependent) | `.../p` (Variable Scan) | `.../p` (Strictly Positive) |
 | **I-Gain (Ki)** | `.../i` (Sign-Dependent) | `.../i` -> `0.0` | `.../i` (Strictly Positive) |
@@ -109,7 +126,7 @@ Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece befor
 | **Routing** | `/{dev}/sigouts/0/enables/3` -> `1` | `/{dev}/sigouts/1/enables/7` -> `1` |
 | **Phase Node** | `/{dev}/demods/3/phaseshift` -> `0.0` | `/{dev}/demods/2/phaseshift` -> **`90.0` (Crucial)** |
 
-
+* The nodes for signal outputs: ('sigouts/0/amplitudes/3', 0.1) and ('sigouts/1/amplitudes/7', 0.0)
 
 > **Note on PID Polarity:** If parasitic capacitance inverts the phase slope, we must invert the P and I gains for **PID 1 only**. PID3 and PID4 normally use positive polarity, but verify the Q-control sign by checking that increasing $K_p$ increases damping (shorter $\tau$).
 
