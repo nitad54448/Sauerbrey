@@ -22,7 +22,7 @@ Before engaging any control loops, we must find the natural state of the QCM.
 5. Check the slope direction: If it goes down through resonance, the slope is Normal. If it goes up (due to parasitic capacitance or others), the slope is Inverted.
 
 ### Step 2: Engage Frequency Tracking (PID 1)
-1. Use the PID Advisor to calculate baseline Proportional (P) and Integral (I) gains for a target bandwidth of 20 to 50 Hz (depending on the crystal BW).
+1. Use the PID Advisor to calculate baseline Proportional (P) and Integral (I) gains for a target bandwidth of about 100 Hz (depending on the crystal BW).
 2. Apply the polarity rule: If your phase slope is Normal, use Negative P and I gains (those given by Advisor). If it is Inverted, use Positive P and I gains. **D-Gain is always 0.**
 3. Apply your measured phase setpoint from Step 1 to PID 1.
 4. Enable PID 1 (in PLL). The lock-in will now continuously track the resonance frequency (for measuring during the deposition increase the lowlimit value). The Phase Locked Loop (PLL) must remain active. If PLL is lost, check the BW parameters, cables, noise ?
@@ -31,7 +31,7 @@ Before engaging any control loops, we must find the natural state of the QCM.
 ### Step 3: Q-Calibration & Scanning (PID 3)
 With the frequency locked, we must calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By stepping the drive amplitude to half (or maybe 33%, need to test this), the resonator undergoes a transient decay to a new steady state. Because the signal never drops into the noise floor, the PLL should remain locked throughout the measurement.
 1. Ensure PID 3 P-gain starts at 0.
-2. Define a safe $K_p$ scan array (e.g., 0.0 to 1.0 or 2.0, we'll check the limit during the measurement) for the PID3. Put lower limit and upper limit to -0.5V and 0.5V.
+2. Define a safe $K_p$ scan array (e.g., 0.0 to 1.0 or 2.0, we'll check the limit during the measurement) for the PID3. Put lower limit and upper limit to -0.25V and 0.25V.
 3. **For each $K_p$ value in the array:**
 
     * Apply $K_p$ to PID 3, **enable PID 3** (`pids/2/enable -> 1`), and wait 500 ms for the system to settle.
@@ -91,11 +91,11 @@ The multi-loop system is now fully locked. You can begin mass-loading experiment
 
 
 ### B. Demodulator Settings (Example for 6 MHz, Q=50k)
-All Demods must be referenced to `Oscillator 1`. Enable data streaming ONLY for Demod 2 during the measurement phase (50k to 100k).
+All Demods must be referenced to `Oscillator 1`. Enable data streaming ONLY for Demod 2 during the measurement phase (about 100 kSa/sec).
 
 | Demodulator | Role | `timeconstant` Value | `order` Value | Base Node Path |
 | :--- | :--- | :--- | :--- | :--- |
-| **Demod 1** | **PLL Source** | `1e-3` (~1 ms) | `4` (Standard) | `/{dev}/demods/0/` |
+| **Demod 1** | **PLL Source** | `0.2 to 1e-3` (~200 us to 1 ms) | `4` (Standard) | `/{dev}/demods/0/` |
 | **Demod 2** | **Measurement** | `10e-6` (10 µs) | `1` (Fast, for ring down) | `/{dev}/demods/1/` |
 | **Demod 3** | **Q-Control** | `30e-6` (~30 µs) | `4` (Fast) | `/{dev}/demods/2/` |
 | **Demod 4** | **AGC Source** | `100e-3` (~100 ms) | `4` (Slow) | `/{dev}/demods/3/` |
@@ -107,7 +107,7 @@ Configure the PID modules below. PID 2 is skipped.
 | Parameter | PID 1 (`/{dev}/pids/0/`) | PID 3 (`/{dev}/pids/2/`) | PID 4 (`/{dev}/pids/3/`) |
 | :--- | :--- | :--- | :--- |
 | **Function** | Frequency Tracking | Active Damping | Amplitude Stability |
-| **Target BW** | `10` to `50` Hz | Scan dependent | Slow (e.g., `< 10` Hz) |
+| **Target BW** | `50` to `100` Hz | Scan dependent | Slow  |
 | **Module Mode** | **PLL** | **PID** | **PID** |
 | **Input Node** | `.../input` (Demod 1 Phase) | `.../input` (Demod 3 R) | `.../input` (Demod 4 R) |
 | **Setpoint**| `.../setpoint` (Resonance Phase) | `.../setpoint` -> `0.0` | `.../setpoint` (Target Amp, measured amplitude at resonance before applying Q) |
@@ -134,18 +134,18 @@ Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece befor
 
 ## Part 3: Mathematical & Software Reference
 
-### A. The Step-Response Fit & Data Slicing
+### A. The Step-Response Fit 
 To extract the Q-factor, fit the transient amplitude envelope data from Demod 2 to:
 $$A(t) = A_0 \cdot e^{-t/\tau} + C$$
 
 Here, $C$ represents the 50% (or whatever value) steady-state amplitude baseline rather than the noise floor, ensuring the PLL signal remains robust.
 
 **Data Slicing via Sliding-Window Knee Detection:**
-Standard curve-fitting functions fail or become unstable if fed the pre-trigger hardware delay flatline. To isolate the pure decay curve robustly I tested several methods like derivative, fitting t0,... and it appears the Knee Detector works best:
+Standard curve-fitting functions fail or become unstable if fed the pre-trigger hardware delay flatline. To isolate the pure decay curve robustly I tested several methods like derivative, fitting t0,... and it appears the Knee Detector works (but not very well; when changing the voltage, a small peak appears...)
 1. **Define Windows:** Choose a sliding window size (N) of roughly 20 to 30 points (or approximating a few time delays of Demod 2 filter).
 2. **Calculate Local Slopes:** Slide two adjacent windows of size N across the amplitude array. Fit a simple linear regression to each window to extract their local slopes (m1 and m2).
 3. **Find the Knee (t0):** Calculate the difference between the adjacent slopes (delta_m = m2 - m1). Search the array for the index where this difference is maximized. This pinpoints the corner where the flatline drops into the steep exponential transient.
-4. **Slice & Zero:** Truncate the time and amplitude arrays starting from this index (or shift 5 to 10 points to the right to completely clear the filter's rounded shoulder). Subtract the first time value from the entire sliced time array so the pure transient fit starts at t=0.
+4. **Slice & Zero:** Truncate the time and amplitude arrays starting from this index (or shift 5 to 10 points to the right to completely clear the filter's rounded shoulder). Subtract the first time value from the entire sliced time array so the pure transient fit starts at t=0 (or use a stepwise function to fit all).
 
 
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
