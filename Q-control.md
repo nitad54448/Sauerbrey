@@ -138,14 +138,18 @@ Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece befor
 To extract the Q-factor, fit the transient amplitude envelope data from Demod 2 to:
 $$A(t) = A_0 \cdot e^{-t/\tau} + C$$
 
-Here, $C$ represents the 50% (or whatever value) steady-state amplitude baseline rather than the noise floor, ensuring the PLL signal remains robust.
+Here, $C$ represents the 50% (or whatever value) steady-state amplitude baseline rather than the noise floor, ensuring the PLL signal remains robust. If there are parasitic capacitance (like me) there will be a short peak just at the moment of changing the voltage. There are two cases.
+No peak at the change of the voltage
 
 **Data Slicing via Sliding-Window Knee Detection:**
-Standard curve-fitting functions fail or become unstable if fed the pre-trigger hardware delay flatline. To isolate the pure decay curve robustly I tested several methods like derivative, fitting t0,... and it appears the Knee Detector works (but not very well; when changing the voltage, a small peak appears...)
-1. **Define Windows:** Choose a sliding window size (N) of roughly 20 to 30 points (or approximating a few time delays of Demod 2 filter).
-2. **Calculate Local Slopes:** Slide two adjacent windows of size N across the amplitude array. Fit a simple linear regression to each window to extract their local slopes (m1 and m2).
-3. **Find the Knee (t0):** Calculate the difference between the adjacent slopes (delta_m = m2 - m1). Search the array for the index where this difference is maximized. This pinpoints the corner where the flatline drops into the steep exponential transient.
-4. **Slice & Zero:** Truncate the time and amplitude arrays starting from this index (or shift 5 to 10 points to the right to completely clear the filter's rounded shoulder). Subtract the first time value from the entire sliced time array so the pure transient fit starts at t=0 (or use a stepwise function to fit all).
+ To isolate the pure decay curve robustly I tested several methods like derivative, fitting t0,... and it appears the Knee Detector works quite well.
+1.  Choose a sliding window size (N) of roughly 20 to 30 points (or approximating a few time delays of Demod 2 filter).
+2.  Slide two adjacent windows of size N across the amplitude array. Fit a simple linear regression to each window to extract their local slopes (m1 and m2).
+3.  Calculate the difference between the adjacent slopes (delta_m = m2 - m1). Search the array for the index where this difference is maximized. This pinpoints the corner where the flatline drops into the steep exponential transient.
+4. Truncate the time and amplitude arrays starting from this index (or shift 5 to 10 points to the right to completely clear the filter's rounded shoulder). Subtract the first time value from the entire sliced time array so the pure transient fit starts at t=0 (or use a stepwise function to fit all).
+
+**Data Slicing via non-linear fit**
+If there is peak, the above mentioned method will not work well. In this case, I detect the peak, remove all data before the peak and then fit two decaying exponentials.
 
 
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
