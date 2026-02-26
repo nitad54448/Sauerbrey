@@ -159,19 +159,21 @@ If there is peak, the above mentioned method will not work well, if at all. In t
 
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
-### B. Calibration and limits
 
-The PID 3 P-gain (Kp) can be used to either decrease or increase the Q-factor. Based on the positive slope fit, the relationship between Kp and the effective system damping (Gamma) is:
-Gamma(Kp) = Gamma_native + (alpha * Kp)
+### B. Calibration and Dynamic Safety Logic
 
-The Gamma_native (the y-intercept) and alpha (the positive slope) are obtained by fitting the extracted damping rates against the scanned Kp values (the Kp can be positive or negative, for damping and increasing Q, respectively).
+The PID 3 P-gain (Kp) can be used to either decrease or increase the Q-factor. Based on the negative slope fit shown in the calibration, the relationship between Kp and the effective system damping (Gamma) is:
+Gamma(Kp) = Gamma_native - (alpha * Kp)
 
-* **Active Damping (Lowering Q):** Kp > 0. Adds artificial viscous damping.
-* **Q-Enhancement (Increasing Q):** Kp < 0. Counteracts natural damping.
+Where Gamma_native (the y-intercept) is your natural damping, and alpha is the magnitude of the slope obtained by fitting the extracted damping rates against your scanned Kp values.
+
+* **Active Damping (Lowering Q):** Kp < 0. Adds artificial viscous damping.
+* **Q-Enhancement (Increasing Q):** Kp > 0. Counteracts natural damping.
 
 **Reaching the Target Q:**
-Once the calibration scan is complete and the linear dependence is observed, calculate the exact Kp required for the  target Q:
-Kp_target = ((pi * f0 / Q_target) - Gamma_native) / alpha
+Once the calibration scan is complete and your slope alpha is accurately fitted, calculate the exact Kp required for your target Q:
+Kp_target = (Gamma_native - (pi * f0 / Q_target)) / alpha
+
 
 **Lasing limit**
 When enhancing the Q-factor (Kp < 0), we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
