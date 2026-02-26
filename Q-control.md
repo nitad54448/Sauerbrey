@@ -11,15 +11,19 @@ Based on notes from R. Stomp see https://www.zhinst.com/europe/en/blogs/resonanc
 
 ## Part 1: The Experimental Workflow
 
-This section outlines the logical sequence to initialize the system, calibrate the active damping, and lock the resonator for measurement.
+This section outlines the logical sequence to initialize the system, calibrate the active damping, and lock the resonator for measurement. It is supposed to make a Q-control system for a QCM resonator. In this description, the PLL is activated first then the Q parameters are found, but Q control can be made without the PLL.
+
 
 ### Step 1: Initial Sweep & Characterization
-Before engaging any control loops, we must find the natural state of the QCM.
-1. Run a frequency sweep across the expected resonance (e.g., around 6 MHz).
-2. Calculate the native resonance frequency ($f_0$), bandwidth (BW), and native Q-factor from the amplitude peak. Amplitude will be used in pids4, see later.
-3. Locate the frequency where the phase slope ($d\Theta/df$) is steepest. 
-4. Record the exact phase angle at this steepest point. **This is the resonance phase setpoint.** (Lorentz fit and Pratt circle should give similar values -use unwrap in sweep. Note that in the v3 version of the program, the resonance point is calculated at the minimum point of the amplitude of the Lorentz fit. If the resonance is not symmetrical, use the Pratt parameters which take the resonance at the max slope of the phase.)
-5. Check the slope direction: If it goes down through resonance, the slope is Normal. If it goes up (due to parasitic capacitance or others), the slope is Inverted.
+Before engaging any control loops, we must find the natural state of the QCM. **Crucially, the electrical boundary conditions must match the final setup.**
+1. **Turn ON `Signal Output 2` and set its amplitude to 0 V.** This engages the internal 50-ohm impedance, which creates a voltage divider with `Signal Output 1` at the physical T-piece.
+2. **Turn ON `Signal Output 1` and set its amplitude to double** your physically desired drive voltage (to compensate for the 50% drop across the T-piece).
+3. Run a frequency sweep across the expected resonance (e.g., around 6 MHz).
+4. Calculate the native resonance frequency ($f_0$), bandwidth (BW), and native Q-factor from the amplitude peak. Amplitude will be used in pids4, see later.
+5. Locate the frequency where the phase slope ($d\Theta/df$) is steepest. 
+6. Record the exact phase angle at this steepest point. **This is the resonance phase setpoint.** (Lorentz fit and Pratt circle should give similar values -use unwrap in sweep. Note that in the v3 version of the program, the resonance point is calculated at the minimum point of the amplitude of the Lorentz fit. If the resonance is not symmetrical, use the Pratt parameters which take the resonance at the max slope of the phase.)
+7. Check the slope direction: If it goes down through resonance, the slope is Normal. If it goes up (due to parasitic capacitance or others), the slope is Inverted.
+
 
 ### Step 2: Engage Frequency Tracking (PID 1)
 1. Use the PID Advisor to calculate baseline Proportional (P) and Integral (I) gains for a target bandwidth of about 100 Hz (depending on the crystal BW).
@@ -47,25 +51,26 @@ With the frequency locked, we must calibrate the relationship between the Q-Cont
     * Fit the valid decay curve to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
     * Verify that increasing $K_p$ reduces the transient time constant before proceeding.
 
-
 ### Step 4: Engage Steady State
-Once your calibration scan is complete and we have the linear fit parameters ($\Gamma_{native}$ and $\alpha$), we can lock the system into its new Q-state.
+Once the calibration scan is complete and we have the linear fit parameters ($\Gamma_{native}$ and $\alpha$), we can lock the system into its new Q-state.
 
 **1. Calculate and Apply Final Q-Control Gain**
-Calculate the exact $K_p$ required for the desired target Q:
-$K_{p\_target} = \frac{\Gamma_{native} - (\pi \cdot f_0 / Q_{target})}{\alpha}$
-* Push this value to PID 3: `/{dev}/pids/2/p` -> $K_{p\_target}$
+Calculate the $K_p$ required for the desired target Q. This formula handles both active damping (positive $K_p$) and Q-enhancement (negative $K_p$):
+$$K_{p\_target} = \frac{\frac{\pi \cdot f_0}{Q_{target}} - \Gamma_{native}}{\alpha}$$
+* Set the value to PID 3: `/{dev}/pids/2/p` -> $K_{p\_target}$
 * Enable PID 3 permanently: `/{dev}/pids/2/enable` -> `1`
 
-**2. Scale the PLL (Crucial for Stability)**
-Lowering the Q-factor actively widens the resonance bandwidth and flattens the phase slope. We need to adjust the PLL, it will become sluggish or unstable.
-Scale the PID 1 Proportional gain based on the Q-reduction ratio:
-$P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$
+**2. Scale the PLL**
+Changing the Q-factor directly alters the phase slope ($d\Theta/df$) near resonance. Lowering Q flattens the slope (requiring more PLL gain), while increasing Q steepens the slope (requiring less PLL gain). 
+Scale the PID 1 Proportional and Integral gains based on the Q-ratio to maintain your original tracking bandwidth:
+$$P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$$
+$$I_{new} = I_{native} \times \frac{Q_{native}}{Q_{target}}$$
 * Update PID 1 P-gain: `/{dev}/pids/0/p` -> $P_{new}$
-Note: maybe we need to change also the BW of PID1 (aka timeconstant of demod 1) to adapt to this new widen resonance ?
+* Update PID 1 I-gain: `/{dev}/pids/0/i` -> $I_{new}$
+*(Note: the PLL and Q control will work if the Osc2 follows the frequency of Osc1. This is pssible with the MF option or by referencing the Osc2 to have the Osc1 frequency, via EstRef)*
 
 **3. Engage the AGC**
-Now that the active damping is pulling the amplitude down, turn on the AGC to automatically adjust the drive voltage and hold the amplitude at your target setpoint.
+Now that the active damping or enhancement has altered the natural amplitude, turn on the AGC to automatically adjust the drive voltage and hold the amplitude at your target setpoint.
 * Enable PID 4: `/{dev}/pids/3/enable` -> `1`
 
 **4. Begin Experiment**
@@ -84,8 +89,8 @@ The multi-loop system is now fully locked. You can begin mass-loading experiment
 
 ### A. Hardware Wiring & Output Routing
 * **Input Signal (`Signal Input 1`):** Resonator response. Feeds all four Demods.
-* **Drive Output (`Signal Output 1`):** Main excitation, controlled by PID 4 (AGC). Set Phase to 0.0 deg. Routed to Oscillator 1.
-* **Q-Feedback (`Signal Output 2`):** Feedback force, controlled by PID 3 (Q-Control) (set demod 3 phase to 90.0 deg). **Must be explicitly routed to Oscillator 1.**
+* **Drive Output (`Signal Output 1`):** Main excitation, controlled by PID 4 (AGC). Set Phase to an appopriate value. Routed to Oscillator 1.
+* **Q-Feedback (`Signal Output 2`):** Feedback force, controlled by PID 3 (Q-Control) (set demod 3 phase to 90.0 deg). **Must be explicitly routed to Oscillator 1. If this is not possible, the Osc 2 frequency must be set manually** 
 
 > **Hardware:** Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece before connecting to the resonator.
 
@@ -156,25 +161,24 @@ $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
 ### B. Calibration and Dynamic Safety Logic
 
-The relationship between PID 3 P-gain ($K_p$) and system damping ($\Gamma$) is linear:
-$\Gamma(K_p) = \Gamma_{native} - \alpha \cdot K_p$
+The PID 3 P-gain ($K_p$) can be used to either decrease or increase the Q-factor. Based on your positive slope fit, the relationship between $K_p$ and the effective system damping ($\Gamma$) is:
+$$\Gamma(K_p) = \Gamma_{native} + \alpha \cdot K_p$$
 
-Where $\Gamma_{native}$ (the intercept) and $\alpha$ (the slope) are obtained by fitting the extracted damping rates against the scanned $K_p$ values.
+Where $\Gamma_{native}$ (the y-intercept) and $\alpha$ (the positive slope) are obtained by fitting the extracted damping rates against your scanned $K_p$ values.
 
-**Dynamic Lasing Threshold Estimation:**
-If $K_p$ is set too high, the total damping becomes negative, causing the amplitude to grow exponentially (Lasing). To avoid blindly stepping into this dangerous regime during an automated scan:
-1. Measure the natural damping $\Gamma_{native}$ at $K_p = 0$.
-2. Perform 2 to 3 initial partial ring-downs at small, strictly safe $K_p$ increments (e.g., 0.5, 1.0).
-3. Calculate a preliminary linear fit on these initial points to estimate the coupling slope ($\alpha$).
-4. Dynamically predict the maximum safe gain: $K_{p\_max} = \Gamma_{native} / \alpha$.
-5. Programmatically limit the remainder of your $K_p$ scan array to stay safely below this threshold (e.g., cap the maximum scan value at 80% or 90% of $K_{p\_max}$).
+* **Active Damping (Lowering Q):** Applying a positive $K_p$ adds artificial viscous damping to the system.
+* **Q-Enhancement (Increasing Q):** Applying a negative $K_p$ counteracts natural damping, increasing the effective Q.
 
 **Reaching the Target Q:**
-Once the fully bounded scan is complete and your final $\alpha$ is accurately fitted, calculate the exact $K_p$ required for your target Q:
-$K_{p\_target} = [ \Gamma_{native} - (\pi \cdot f_0 / Q_{target}) ] / \alpha$
+Once the calibration scan is complete and your slope $\alpha$ is accurately fitted, calculate the exact $K_p$ required for your target Q. The formula natively handles both active damping and Q-enhancement:
+$$K_{p\_target} = \frac{\frac{\pi \cdot f_0}{Q_{target}} - \Gamma_{native}}{\alpha}$$
+*(Note: If $Q_{target} > Q_{native}$, the formula will correctly yield a negative $K_p$.)*
 
-**Hardware Limits (Fail-Safe):**
-Even with dynamic prediction, always apply the hardware limits (`pids/2/limitlower` and `limitupper`) to ±0.5 V. This acts as a hard physical fail-safe to prevent damage if the initial slope estimate slightly overshoots.
+**Dynamic Lasing Threshold & Safety Limits:**
+When enhancing the Q-factor ($K_p < 0$), you risk pushing the total damping to zero or below, causing the amplitude to grow exponentially (Lasing).
+* **Lasing Threshold:** $K_{p\_lasing} = -\frac{\Gamma_{native}}{\alpha}$
+* **Dynamic Limit:** When automating a scan for Q-enhancement, calculate a preliminary fit and cap your negative $K_p$ array at 80% to 90% of $K_{p\_lasing}$.
+* **Hardware Limits (Fail-Safe):** Always apply the hardware limits (`pids/2/limitlower` and `limitupper` to `-0.25` and `0.25` V) to act as a hard physical fail-safe against lasing or saturation.
 
 ---
 
