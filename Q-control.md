@@ -141,7 +141,7 @@ Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece befor
 
 ### A. The Step-Response Fit 
 To extract the Q-factor, fit the transient amplitude data from Demod 2 to one or two exponential decays
-$$A(t) = A_0 \cdot e^{-t0/\tau} + A_1 \cdot e^{-t1/\tau_1} + C$$
+$$A(t) = A_0 \cdot e^{-t_0/\tau_0} + A_1 \cdot e^{-t_1/\tau_1} + C$$
 
 Here, $C$ represents an offset whose magnitude is related to the 50% (or whatever value) steady-state baseline. If there are parasitic capacitance (like I have) there will be a short peak just at the moment of changing the voltage. The data to fit must be only that of the decay. There are several ways to do it, I implemented two methods in the v3 code.
 
