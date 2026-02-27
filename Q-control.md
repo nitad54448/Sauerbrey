@@ -51,34 +51,40 @@ With the frequency locked, we must calibrate the relationship between the Q-Cont
     * Fit the valid decay curve to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
     * Verify that increasing $K_p$ reduces the transient time constant before proceeding.
 
-### Step 4: Engage Steady State
-Once the calibration scan is complete and we have the linear fit parameters ($\Gamma_{native}$ and $\alpha$), we can lock the system into its new Q-state.
 
+<<<<<<< Updated upstream
 **1. Calculate Kp and apply Q-Control**
 Calculate the $K_p$ required for the desired target Q. This formula handles both active damping (positive $K_p$) and Q-enhancement (negative $K_p$):
 
 $$K_{p\_target} = \frac{\frac{\pi \cdot f_0}{Q_{target}} - \Gamma_{native}}{\alpha}$$
 
 * Set the value to PID 3: `/{dev}/pids/2/p` -> $K_{p\_target}$
+=======
+### Step 4: Engage Steady State
+Once the calibration scan is complete and we have the linear fit parameters (Gamma_native and alpha), we can lock the system into its new Q-state.
+
+**1. Calculate and Apply Final Q-Control Gain**
+Calculate the Kp required for the desired target Q. This formula natively handles both active damping (negative Kp) and Q-enhancement (positive Kp) using the negative slope convention:
+Kp_target = (Gamma_native - (pi * f0 / Q_target)) / alpha
+* Push this value to PID 3: `/{dev}/pids/2/p` -> Kp_target
+>>>>>>> Stashed changes
 * Enable PID 3 permanently: `/{dev}/pids/2/enable` -> `1`
 
-**2. Scale the PLL**
-Changing the Q-factor directly alters the phase slope ($d\Theta/df$) near resonance. Lowering Q flattens the slope (requiring more PLL gain), while increasing Q steepens the slope (requiring less PLL gain). 
-Scale the PID 1 Proportional and Integral gains based on the Q-ratio to maintain your original tracking bandwidth:
-$$P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$$
-$$I_{new} = I_{native} \times \frac{Q_{native}}{Q_{target}}$$
-* Update PID 1 P-gain: `/{dev}/pids/0/p` -> $P_{new}$
-* Update PID 1 I-gain: `/{dev}/pids/0/i` -> $I_{new}$
+**2. Scale the PLL (Crucial for Stability)**
+Changing the Q-factor directly alters the phase slope (dTheta/df) near resonance. Lowering Q flattens the slope (requiring more PLL gain), while increasing Q steepens the slope (requiring less PLL gain). 
+Scale the PID 1 Proportional and Integral gains using the Q-ratio to maintain your original tracking bandwidth:
+P_new = P_native * (Q_native / Q_target)
+I_new = I_native * (Q_native / Q_target)
+* Update PID 1 P-gain: `/{dev}/pids/0/p` -> P_new
+* Update PID 1 I-gain: `/{dev}/pids/0/i` -> I_new
 *(Note: the PLL and Q control will work together if the Osc2 follows the frequency of Osc1. This is pssible with the MF option or by referencing the Osc2 to have the Osc1 frequency, via EstRef)*
 
 **3. Engage the AGC**
-Now that the active damping or enhancement has altered the natural amplitude, turn on the AGC to automatically adjust the drive voltage and hold the amplitude at your target setpoint. The setpoint for the PID4 should be the measured amplitude at the resonance point/
+Now that the active damping or enhancement has altered the natural amplitude, turn on the AGC to automatically adjust the drive voltage and hold the amplitude at your target setpoint.
 * Enable PID 4: `/{dev}/pids/3/enable` -> `1`
 
-**4. Begin experiment**
+
 The multi-loop system should be fully locked, although sometimes igniting a plasma will break it ! 
-
-
 ---
 
 
@@ -186,8 +192,13 @@ Kp_target = (Gamma_native - (pi * f0 / Q_target)) / alpha
 
 
 **Lasing limit**
+<<<<<<< Updated upstream
 When enhancing the Q-factor we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
 * **Lasing Threshold:** Kp_lasing = -(Gamma_native / alpha)
+=======
+When enhancing the Q-factor (Kp < 0), we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
+* **Lasing Threshold:** Kp_lasing = (Gamma_native / alpha)
+>>>>>>> Stashed changes
 * **Dynamic Limit:** When automating a scan for Q-enhancement, calculate a preliminary fit and cap your negative Kp array at 80% to 90% of Kp_lasing.
 * **Hardware Limits:** Apply the hardware limits (`pids/2/limitlower` and `limitupper` to reasonable vlaues, e.g. -0.25 and 0.25 V) to act as physical fail-safe against lasing (in the negative direction) or output saturation (in the positive direction).
 
