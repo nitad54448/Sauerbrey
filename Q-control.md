@@ -140,22 +140,28 @@ Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece befor
 ## Part 3: Mathematical & Software Reference
 
 ### A. The Step-Response Fit 
-To extract the Q-factor, fit the transient amplitude envelope data from Demod 2 to:
-$$A(t) = A_0 \cdot e^{-t/\tau} + C$$
+To extract the Q-factor, fit the transient amplitude data from Demod 2 to one or two exponential decays
+$$A(t) = A_0 \cdot e^{-t0/\tau} + A_1 \cdot e^{-t/\tau\1} + C$$
 
-Here, $C$ represents the 50% (or whatever value) steady-state amplitude baseline rather than the noise floor, ensuring the PLL signal remains robust. If there are parasitic capacitance (like I have) there will be a short peak just at the moment of changing the voltage. There are two cases.
-No peak at the change of the voltage (ideal world).
+Here, $C$ represents an offset whose magnitude is related to the 50% (or whatever value) steady-state baseline. If there are parasitic capacitance (like I have) there will be a short peak just at the moment of changing the voltage. The data to fit must be only that of the decay. There are several ways to do it, I implemented two methods in the v3 code.
 
-**Data Slicing via Sliding-Window Knee Detection:**
- To isolate the pure decay curve robustly I tested several methods like derivative, fitting t0,... and it appears the Knee Detector works quite well.
+**Data slicing with Knee Detection:**
+ To isolate the pure decay curve, if there is no peak when the SigOut 1 amplitude is changed, the Knee Detector works quite well.
 1.  Choose a sliding window size (N) of roughly 20 to 30 points (or approximating a few time delays of Demod 2 filter).
 2.  Slide two adjacent windows of size N across the amplitude array. Fit a simple linear regression to each window to extract their local slopes (m1 and m2).
-3.  Calculate the difference between the adjacent slopes (delta_m = m2 - m1). Search the array for the index where this difference is maximized. This pinpoints the corner where the flatline drops into the steep exponential transient.
-4. Truncate the time and amplitude arrays starting from this index (or shift 5 to 10 points to the right to completely clear the filter's rounded shoulder). Subtract the first time value from the entire sliced time array so the pure transient fit starts at t=0 (or use a stepwise function to fit all).
+3.  Calculate the difference between the adjacent slopes and search in the array of the differences the index where this difference is maximized. This pinpoints the corner where the flatline drops into the steep exponential transient.
+4. Truncate the time and amplitude arrays starting from this index (or shift 5 to 10 points to the right to completely clear the filter's rounded shoulder). Subtract the first time value from the entire sliced time array so the pure transient fit starts at t=0.
+This method can be used whether or not the peak is present; if it is, a small number of points for the knee detector should be selected.
 
-**Data Slicing via non-linear fit**
-If there is peak, the above mentioned method will not work well, if at all. In this case, I detect the peak (max value of the the average of three adjacent points), remove all data before the peak and then fit two decaying exponentials. The two decaying exponentials are fitted, in my case, by a constrained TRDL algorithm. One of the problems is how to distinguish between the parasitic capacitance decay and native crystal decay. 
+**Data slicing with a MAx intensity value**
+A simpler way, in the case of a peak appearing at the change of the amplitude, is to search for the maximum amplitude and get only the data after this point. To prevent getting a spurious point, it is better to make averages of a small subset 3-5 points and search for the max average. 
+This method will not work if there is no peak appearing.
 
+
+**Non-linear fit**
+Whatever the slicing mechanism selected, the data for one or two exponential decays are fitted with a non linear algorithm. For one decay I use a Levenberg-Marquardt unconstrained fit. 
+In the case of a two decays, we assume that one is related to the capacitance discharging and another is related with the resonator. We also assume that the timeconstant of the resonator is larger than that of parasitic noise. I use a TRDL constrained fit, in which one of the decays is faster, that will not be considered later, and the second decay -with a larger timeconstant- is assigned to the resonator.
+At the time of this writting, my tests gave timeconstants *smaller* than expected; I did not figure that out yet. 
 
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
