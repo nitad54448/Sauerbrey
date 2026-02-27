@@ -161,7 +161,7 @@ This method will not work if there is no peak appearing.
 **Non-linear fit**
 Whatever the slicing mechanism selected, the data for one or two exponential decays are fitted with a non linear algorithm. For one decay I use a Levenberg-Marquardt unconstrained fit. 
 In the case of a two decays, we assume that one is related to the capacitance discharging and another is related with the resonator. We also assume that the timeconstant of the resonator is larger than that of parasitic noise. I use a TRDL constrained fit, in which one of the decays is faster, that will not be considered later, and the second decay -with a larger timeconstant- is assigned to the resonator.
-At the time of this writting, my tests gave timeconstants *smaller* than expected; I did not figure that out yet. 
+At the time of this writting, my tests gave timeconstants *smaller* than expected; I think I need to fit only the later part of the decay... 
 
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
