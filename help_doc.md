@@ -65,5 +65,5 @@ Configures high-speed data capture for transient events.
 An overview and system control panel.
 
 * **Status Window:** Displays a log of system messages, errors, and connection confirmations. These are also logged in the TDMS file.
-* **Plotter:** Open the Saurbrey.html program to analyse the data in real time (Chrome or Edge are required for real time visialization).
+* **Plotter:** Open the Saurbrey.html program to analyse the data in real time (Chrome or Edge are required for real time visialization). The text and TDMS files are located in the /Documents/Labview Data/year_month/timestamp.txt. Only txt files can be read with the Sauerbrey program. For reading TDMS files you can use Excel or other programs (one of those is listed in my repositories).
 * **Quit:** Safely stops the instrument outputs and closes the LabVIEW application.
