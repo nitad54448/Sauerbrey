@@ -35,14 +35,14 @@ Before engaging any control loops, we must find the natural state of the QCM. **
 ### Step 3: Q-Calibration & scanning (PID 3)
 With the frequency locked, we must calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By stepping the drive amplitude to half (or 33%), the resonator undergoes a transient decay to a new steady state. Because the signal never drops into the noise floor, the PLL should remain locked throughout the measurement.
 1. Ensure PID 3 P-gain starts at 0.
-2. Define a safe $K_p$ scan array (e.g., 0.0 to 10.0 or 20.0, increase it in subsecvent trials) for the PID3. Put lower limit and upper limit to -0.25V and 0.25V.
+2. Define a safe $K_p$ scan array (e.g., -10.0 to to 10.0, increase it in subsecvent trials) for the PID3. Put lower limit and upper limit to about -0.25V and 0.25V.
 3. **For each $K_p$ value in the array:**
 
     * Apply $K_p$ to PID 3, **enable PID 3** (`pids/2/enable -> 1`), and wait a bit (500-1000 ms) for the system to settle.
-    * Get data from the Demod 2 (you can use DAQ, we now use Poll module, it is fast enough for this purpose).
+    * Get data from the Demod 2 (you can use DAQ; we now use Poll module, it is fast enough for this purpose).
     * Step the drive signal amplitude down to 50% (or lower) of its initial value (do not disable the output).
     * Measure ~30 - 50 ms for the amplitude to decay to the new steady state.
-    * Restore the drive signal amplitude to its original value and stop polling.
+    * Stop polling and restore the drive signal amplitude to its original value.
     * **Disable PID 3** (`pids/2/enable -> 0`) before iterating to the next gain value.
     * Wait approximately 3 to 5 times the time constant ($\tau$) for the physical amplitude to stabilize; 10-50 msec is enough.
     * Verify that the PLL remained securely locked during the transient step (larger steps down are better but PLL might be lost during this transient).
@@ -141,9 +141,10 @@ Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece befor
 
 ### A. The Step-Response Fit 
 To extract the Q-factor, fit the transient amplitude data from Demod 2 to one or two exponential decays
+
 $$A(t) = A_0 \cdot e^{-t_0/\tau_0} + A_1 \cdot e^{-t_1/\tau_1} + C$$
 
-Here, $C$ represents an offset whose magnitude is related to the 50% (or whatever value) steady-state baseline. If there are parasitic capacitance (like I have) there will be a short peak just at the moment of changing the voltage. The data to fit must be only that of the decay. There are several ways to do it, I implemented two methods in the v3 code.
+Here, $C$ represents an offset whose magnitude is related to the 50% (or whatever value) steady-state baseline. There might be a short peak just at the moment of changing the voltage. The data to fit must be only that of the decay, after this peak. There are several ways to do it, I implemented two methods in the v3 code.
 
 **Data slicing with Knee Detection:**
  To isolate the pure decay curve, if there is no peak when the SigOut 1 amplitude is changed, the Knee Detector works quite well.
@@ -154,14 +155,15 @@ Here, $C$ represents an offset whose magnitude is related to the 50% (or whateve
 This method can be used whether or not the peak is present; if it is, a small number of points for the knee detector should be selected.
 
 **Data slicing with a MAx intensity value**
-A simpler way, in the case of a peak appearing at the change of the amplitude, is to search for the maximum amplitude and get only the data after this point. To prevent getting a spurious point, it is better to make averages of a small subset 3-5 points and search for the max average. 
-This method will not work if there is no peak appearing.
+A simpler way, in the case of a peak appearing at the change of the amplitude, is to search for the maximum amplitude and get only the data after this point. 
+To prevent getting a spurious point as a maximum, it is better to make averages of a small subsets of 3-5 points, slide these, and search for the max average. 
+This method will not work if there is no peak at the moment of ring down.
 
 
 **Non-linear fit**
 Whatever the slicing mechanism selected, the data for one or two exponential decays are fitted with a non linear algorithm. For one decay I use a Levenberg-Marquardt unconstrained fit. 
 In the case of a two decays, we assume that one is related to the capacitance discharging and another is related with the resonator. We also assume that the timeconstant of the resonator is larger than that of parasitic noise. I use a TRDL constrained fit, in which one of the decays is faster, that will not be considered later, and the second decay -with a larger timeconstant- is assigned to the resonator.
-At the time of this writting, my tests gave timeconstants *smaller* than expected; I think I need to fit only the later part of the decay... 
+At the time of this writting, my tests gave timeconstants *smaller* than expected; I think I need to fit only the later part of the decay...
 
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
@@ -182,7 +184,7 @@ Kp_target = (Gamma_native - (pi * f0 / Q_target)) / alpha
 
 
 **Lasing limit**
-When enhancing the Q-factor (Kp < 0), we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
+When enhancing the Q-factor we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
 * **Lasing Threshold:** Kp_lasing = -(Gamma_native / alpha)
 * **Dynamic Limit:** When automating a scan for Q-enhancement, calculate a preliminary fit and cap your negative Kp array at 80% to 90% of Kp_lasing.
 * **Hardware Limits:** Apply the hardware limits (`pids/2/limitlower` and `limitupper` to reasonable vlaues, e.g. -0.25 and 0.25 V) to act as physical fail-safe against lasing (in the negative direction) or output saturation (in the positive direction).
@@ -208,7 +210,7 @@ The goal is to capture fast plasma transients while maintaining stable multi-loo
 | Demodulator | Role | Recommended Time Constant | Filter Order | Purpose |
 |-------------|------|--------------------------|--------------|---------|
 | **Demod 1** | **PLL Source** | **0.3 to 1 ms** | 4 | Stable phase tracking without reacting to plasma spikes. |
-| **Demod 2** | **DAQ Measurement** | **0.1 to 1 us** | **1 (Critical)** | High temporal resolution, minimal filter delay for transient capture. |
+| **Demod 2** | **DAQ Measurement** | **0.1 to 10 us** | **1 (Critical)** | High temporal resolution, minimal filter delay for transient capture. |
 | **Demod 3** | **Q-Control Source** | **20 to 50 us** | 4 | Fast damping/enhancement control without noise amplification. |
 | **Demod 4** | **AGC Source** | **50 to 200 ms** | 4 | Slow amplitude stabilization; must not follow pulses. |
 
