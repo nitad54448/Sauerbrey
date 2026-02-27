@@ -57,7 +57,7 @@ Once the calibration scan is complete and we have the linear fit parameters ($\G
 **1. Calculate Kp and apply Q-Control**
 Calculate the $K_p$ required for the desired target Q. This formula handles both active damping (positive $K_p$) and Q-enhancement (negative $K_p$):
 
-$$K_{p\_target} = \frac{\frac{\pi \cdot f_0}{Q_{target}} - \Gamma_{native}}{\alpha}$$
+$$K_{p\target} = \frac{\frac{\pi \cdot f_0}{Q_{target}} - \Gamma_{native}}{\alpha}$$
 
 * Set the value to PID 3: `/{dev}/pids/2/p` -> $K_{p\_target}$
 * Enable PID 3 permanently: `/{dev}/pids/2/enable` -> `1`
