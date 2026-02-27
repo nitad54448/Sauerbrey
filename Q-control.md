@@ -53,6 +53,7 @@ With the frequency locked, we must calibrate the relationship between the Q-Cont
 
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 **1. Calculate Kp and apply Q-Control**
 Calculate the $K_p$ required for the desired target Q. This formula handles both active damping (positive $K_p$) and Q-enhancement (negative $K_p$):
 
@@ -60,6 +61,8 @@ $$K_{p\_target} = \frac{\frac{\pi \cdot f_0}{Q_{target}} - \Gamma_{native}}{\alp
 
 * Set the value to PID 3: `/{dev}/pids/2/p` -> $K_{p\_target}$
 =======
+=======
+>>>>>>> Stashed changes
 ### Step 4: Engage Steady State
 Once the calibration scan is complete and we have the linear fit parameters (Gamma_native and alpha), we can lock the system into its new Q-state.
 
@@ -67,6 +70,9 @@ Once the calibration scan is complete and we have the linear fit parameters (Gam
 Calculate the Kp required for the desired target Q. This formula natively handles both active damping (negative Kp) and Q-enhancement (positive Kp) using the negative slope convention:
 Kp_target = (Gamma_native - (pi * f0 / Q_target)) / alpha
 * Push this value to PID 3: `/{dev}/pids/2/p` -> Kp_target
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 * Enable PID 3 permanently: `/{dev}/pids/2/enable` -> `1`
 
@@ -193,8 +199,13 @@ Kp_target = (Gamma_native - (pi * f0 / Q_target)) / alpha
 
 **Lasing limit**
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 When enhancing the Q-factor we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
 * **Lasing Threshold:** Kp_lasing = -(Gamma_native / alpha)
+=======
+When enhancing the Q-factor (Kp < 0), we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
+* **Lasing Threshold:** Kp_lasing = (Gamma_native / alpha)
+>>>>>>> Stashed changes
 =======
 When enhancing the Q-factor (Kp < 0), we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
 * **Lasing Threshold:** Kp_lasing = (Gamma_native / alpha)
