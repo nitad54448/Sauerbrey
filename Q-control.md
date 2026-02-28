@@ -11,45 +11,46 @@ Based on notes from R. Stomp see https://www.zhinst.com/europe/en/blogs/resonanc
 
 ## Part 1: The workflow
 
-This section outlines the logical sequence to initialize the system, calibrate the active damping, and lock the resonator for measurement. It is supposed to make a Q-control system for a QCM resonator. In this description, the PLL is activated first then the Q parameters are found, but Q control can be made without the PLL.
-The program we use was initially made for a DAQ measurement on the demod 2 with a PLL on demod 1. So, building on that, we'll keep the demod 2 for fast measurements, 1 for PLL anddemods 3 and 4 for Q-control. Obviously, other setups can me made, this is more of a ledger for our in-house work.
+This section outlines the logical sequence to initialize the system, calibrate the active damping, and lock the resonator for measurement. It is supposed to make a Q-control system for a QCM resonator. In this description, the PLL is activated first then the Q parameters are found, but Q control can be made without the PLL, or the PLL can be engaged after the Q-control enabled (I did not try this yet though).
+Note that in order to achieve PLL with a different Q, we'll need the option MF-MD, so that the Sigout2 be assigned to the frequency of OSC1. This is required because the PID3 uses Sigout2.  
+The program we use was initially made for a DAQ measurement on the demod 2 with a PLL on demod 1. So, building on that, we'll keep the demod 2 for fast measurements, 1 for PLL anddemods 3 and 4 for Q-control. Obviously, other setups can me made, this is more of a ledger for our in-house work. 
 
 
 ### Step 1: Initial sweep 
-Before engaging any control loops, we must find the natural state of the QCM. **The electrical boundary conditions must match the final setup.**
-1. **Turn ON `Signal Output 2` and set its amplitude to 0 V.** This engages the internal 50-ohm impedance, which creates a voltage divider with `Signal Output 1` at the physical T-piece.
+Before engaging any control loops, we must find the resonance state of the QCM. **The electrical boundary conditions must match the final setup.**
+1. **Turn ON `Signal Output 2`, set its amplitude to 0 V and 50 Ohm impedance.** This engages the internal 50-ohm impedance, which creates a voltage divider with `Signal Output 1` at the physical T-piece.
 2. **Turn ON `Signal Output 1` and set its amplitude to double** the desired drive voltage (to compensate for the voltage divider).
 3. Run a frequency sweep across the expected resonance (e.g., around 6 MHz), you may need to use Unwrap in the sweep procedure.
 4. Calculate the native resonance frequency ($f_0$), bandwidth (BW), and native Q-factor from the amplitude peak (or Pratt circle), the amplitude will be used in pids4, see later.
-5. Locate the resonance point; Lorentz fit and Pratt circle should give similar values. Note that in the v3 version of the QCM_PLL program, the resonance point is calculated at the minimum point of the amplitude of the Lorentz fit or by  aPratt circle fit. If the resonance is not symmetrical, use the Pratt parameters which take the resonance where the phase slope ($d\Theta/df$) is largest.
+5. Locate the resonance point; Lorentz fit and Pratt circle should give similar values. Note that in the v3 version of the QCM_PLL program, the resonance point is calculated at the minimum point of the amplitude of the Lorentz fit or by a Pratt circle fit. If the resonance is not symmetrical, use the Pratt parameters which take the resonance where the phase slope ($d\Theta/df$) is largest.
 6. Check the slope direction: If it goes down through resonance, the slope is Normal. If it goes up (due to parasitic capacitance or others), the slope is Inverted.
 
-
-### Step 2: Frequency tracking (PLL on PID 1)
+### Step 2 (optional): Frequency tracking (PLL on PID 1)
 1. Use the PID Advisor to calculate baseline Proportional (P) and Integral (I) gains for a target bandwidth of about 100 Hz (depending on the crystal BW determined in Step 1 above). In the Advisor use the Resonator model.
 2. Apply the polarity rule: If your phase slope is Normal, use Negative P and I gains (those given by Advisor). If it is Inverted, use Positive P and I gains (i.e. invert the values given by the Advisor). **D-Gain is usually 0.**
 3. Apply the measured phase setpoint from Step 1 to PID 1.
 4. Enable PID 1 (in PLL mode). The lock-in will now continuously track the resonance frequency (for measuring during the deposition increase the lowlimit value). The Phase Locked Loop (PLL) must remain active. If PLL is lost, check the BW parameters, cables, noise ?
-5. Set the osc 2 to the same frequency as osc 1: ('/oscs/1/freq', value).
+5. Set the osc 2 to the same frequency as osc 1: ('/oscs/1/freq', value), or assign SigOut 2 to Osc 1.
 
 ### Step 3: Q-Calibration & scanning (PID 3)
-With the frequency locked, we must calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By stepping the drive amplitude to half (or 33%), the resonator undergoes a transient decay to a new steady state. Because the signal never drops into the noise floor, the PLL should remain locked throughout the measurement.
+We need to calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By stepping down the drive amplitude to half (or 33%), the resonator undergoes a transient decay to a new steady state. Because the signal never drops into the noise floor, the PLL should remain locked throughout the measurement, if it is enabled.
 1. Ensure PID 3 P-gain starts at 0.
 2. Define a safe $K_p$ scan array (e.g., -10.0 to to 10.0, increase it in subsecvent trials) for the PID3. Put lower limit and upper limit to about -0.25V and 0.25V.
-3. **For each $K_p$ value in the array:**
+   **Enable PID 3** (`pids/2/enable -> 1`),
+4. **For each $K_p$ value in the array:**
 
-    * Apply $K_p$ to PID 3, **enable PID 3** (`pids/2/enable -> 1`), and wait a bit (500-1000 ms) for the system to settle.
+    * Apply $K_p$ to PID 3, and wait 500-1000 ms for the system to settle.
     * Get data from the Demod 2 (you can use DAQ; we now use Poll module, it is fast enough for this purpose).
     * Step the drive signal amplitude down to 50% (or lower) of its initial value (do not disable the output).
     * Measure ~30 - 50 ms for the amplitude to decay to the new steady state.
     * Stop polling and restore the drive signal amplitude to its original value.
-    * **Disable PID 3** (`pids/2/enable -> 0`) before iterating to the next gain value.
     * Wait approximately 3 to 5 times the time constant ($\tau$) for the physical amplitude to stabilize; 10-50 msec is enough.
     * Verify that the PLL remained securely locked during the transient step (larger steps down are better but PLL might be lost during this transient).
 
-    * **Safety check:** If the amplitude increases instead of decaying, we have crossed the lasing threshold. Abort the scan and force PID 3 to 0. Note : in the v3 of the program, an estimate of the lasing limit is made before increasing too much the Kp.
-    * Fit the valid decay curve to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
-    * Verify that increasing $K_p$ reduces the transient time constant before proceeding.
+    At the end of the array scan, **Disable PID 3** (`pids/2/enable -> 0`).
+
+    * **Safety check:** If the amplitude increases instead of decaying, we have crossed the lasing threshold. Abort the scan and force PID 3 Kp to 0.
+    * Fit the valid decay curves to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
 
 ### Step 4: Engage Steady State
 Once the calibration scan is complete and we have the linear fit parameters ($\Gamma_{native}$ and $\alpha$), we can lock the system into its new Q-state.
@@ -62,17 +63,17 @@ $$K_{p\_target} = \frac{\frac{\pi \cdot f_0}{Q_{target}} - \Gamma_{native}}{\alp
 * Set the value to PID 3: `/{dev}/pids/2/p` -> $K_{p\_target}$
 * Enable PID 3 permanently: `/{dev}/pids/2/enable` -> `1`
 
-**2. Scale the PLL**
+**2. Scale the PLL (if used)**
 Changing the Q-factor directly alters the phase slope ($d\Theta/df$) near resonance. Lowering Q flattens the slope (requiring more PLL gain), while increasing Q steepens the slope (requiring less PLL gain). 
 Scale the PID 1 Proportional and Integral gains based on the Q-ratio to maintain your original tracking bandwidth:
 $$P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$$
 $$I_{new} = I_{native} \times \frac{Q_{native}}{Q_{target}}$$
 * Update PID 1 P-gain: `/{dev}/pids/0/p` -> $P_{new}$
 * Update PID 1 I-gain: `/{dev}/pids/0/i` -> $I_{new}$
-*(Note: the PLL and Q control will work together if the Osc2 follows the frequency of Osc1. This is pssible with the MF option or by referencing the Osc2 to have the Osc1 frequency, via EstRef)*
+*(Note: the PLL and Q control will work together if the Osc2 follows the frequency of Osc1. This is pssible with the MF option or by referencing the Osc2 to have the Osc1 frequency, via ExtRef)*
 
 **3. Engage the AGC**
-Now that the active damping or enhancement has altered the natural amplitude, turn on the AGC to automatically adjust the drive voltage and hold the amplitude at your target setpoint. The setpoint for the PID4 should be the measured amplitude at the resonance point/
+Now that the active damping or enhancement has altered the natural amplitude, turn on the AGC to automatically adjust the drive voltage and hold the amplitude at your target setpoint. The setpoint for the PID4 should be the measured amplitude at the resonance point.
 * Enable PID 4: `/{dev}/pids/3/enable` -> `1`
 
 **4. Begin experiment**
@@ -80,8 +81,6 @@ The multi-loop system should be fully locked, although sometimes igniting a plas
 
 
 ---
-
-
 ## Q-Control Signal Flow Diagram
 
 ![Q-Control Flow Diagram](q-control-flow.png)
