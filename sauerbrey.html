@@ -147,7 +147,7 @@
 <div class="sidebar">
     <div class="sb-header">
         <h2>QCM Analyst</h2>
-        <small>version 19 feb 2026</small>
+        <small>version 28 feb 2026</small>
     </div>
 
     <div class="sb-content">
@@ -234,19 +234,19 @@
     <div class="chart-container chart-top">
         
         <div class="chart-header">
-            FREQUENCY SHIFT (Hz)
+            <span id="labelFreq">FREQUENCY SHIFT (Hz)</span>
             <div class="header-controls">
-                <!-- New Buttons -->
-                <button id="btnRemovePoints" class="btn-mini" onclick="removeVisiblePoints()">❌ Remove Visible</button>
-                <button id="btnDecimate" class="btn-mini" onclick="decimateVisiblePoints()">📉 Decimate</button>
-                <button id="btnUpdateRight" class="btn-mini" onclick="toggleUpdateRight()">🔒 Follow Live: OFF</button>
+                <button id="btnRemovePoints" class="btn-mini" onclick="removeVisiblePoints()" title="Delete all points in the currently zoomed view">❌ Remove Visible</button>
+                <button id="btnDecimate" class="btn-mini" onclick="decimateVisiblePoints()" title="Reduces data density in the visible area by half">📉 Decimate</button>
+                <button id="btnUpdateRight" class="btn-mini" onclick="toggleUpdateRight()" title="Toggles auto-scrolling to keep incoming live data in view">🔒 Follow Live: OFF</button>
                 <span style="width: 1px; height: 16px; background: #cbd5e1; margin: 0 4px;"></span>
-                <!-- Existing Controls -->
                 <span id="panHint" style="display:none; font-size:0.65rem; color:#94a3b8; align-self:center;">Shift+Drag to pan</span>
-                <button id="btnAutoCursor" class="btn-mini" style="display:none;" onclick="toggleAutoCursor()">Auto: OFF</button>
-                <button id="btnZoomToggle" class="btn-mini" onclick="toggleZoomMode()">Zoom: OFF</button>
-                <button class="btn-mini" onclick="resetZoomAll()">Reset View</button>
+                <button id="btnAutoCursor" class="btn-mini" style="display:none;" onclick="toggleAutoCursor()" title="Auto-snap cursors to the edges of the visible graph">Auto: OFF</button>
+                <button id="btnZoomToggle" class="btn-mini" onclick="toggleZoomMode()" title="Enable mouse drag to zoom and Shift+drag to pan">Zoom: OFF</button>
+                <button class="btn-mini" onclick="resetZoomAll()" title="Restore graphs to show the entire dataset">Reset View</button>
+                <button class="btn-mini" onclick="resetCursors()" title="Snap calculation cursors to the current visible start and end">Reset Cursors</button>
             </div>
+
         </div>
 
         <div class="chart-box">
@@ -313,6 +313,7 @@
         }
     }
 
+
     function removeVisiblePoints() {
         if (D.t.length === 0) return;
         const min = cF.scales.x.min;
@@ -336,19 +337,20 @@
         
         updateGraphs();
 
-        // FIX: Force charts to snap to new data limits
-        [cF, cR, cP].forEach(c => {
-            // Remove any specific zoom limits to allow auto-scaling
-            delete c.options.scales.x.min;
-            delete c.options.scales.x.max;
-            c.resetZoom();
-        });
-
-        // Reset cursors to cover the new remaining range
+        // Snap all charts exactly to the remaining data bounds (ignores old cached zoom limits)
         if(D.t.length > 0) {
-            cursorStart = D.t[0];
-            cursorEnd = D.t[D.t.length-1];
-            // Apply cursor positions (also helps update UI if auto cursor is on)
+            const startT = D.t[0];
+            const endT = D.t[D.t.length - 1];
+
+            [cF, cR, cP].forEach(c => {
+                c.options.scales.x.min = startT;
+                c.options.scales.x.max = endT;
+                c.update('none');
+            });
+
+            // Reset cursors to cover the new remaining range
+            cursorStart = startT;
+            cursorEnd = endT;
             cF.options.plugins.annotation.annotations.line1.value = cursorStart;
             cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
             cF.update('none');
@@ -357,7 +359,34 @@
         recalc();
     }
 
-    function decimateVisiblePoints() {
+
+
+function resetZoomAll() {
+        if (D.t.length === 0) return;
+
+        const startT = D.t[0];
+        const endT = D.t[D.t.length - 1];
+
+        [cF, cR, cP].forEach(chart => {
+            if (!chart) return;
+            
+            // Clear the plugin's cached state silently
+            chart.resetZoom('none');
+            
+            // Force the X-axis to display the exact current data limits
+            chart.options.scales.x.min = startT;
+            chart.options.scales.x.max = endT;
+            chart.update('none');
+        });
+
+        applyAutoCursors();
+    }
+
+
+
+
+
+function decimateVisiblePoints() {
         if (D.t.length === 0) return;
         const min = cF.scales.x.min;
         const max = cF.scales.x.max;
@@ -381,6 +410,16 @@
 
         D.t = newT; D.f = newF; D.r = newR; D.p = newP;
         updateGraphs();
+
+        // Lock all charts to the current visible window to prevent empty sub-plots
+        if(D.t.length > 0) {
+            [cF, cR, cP].forEach(c => {
+                c.options.scales.x.min = min;
+                c.options.scales.x.max = max;
+                c.update('none');
+            });
+        }
+
         recalc();
     }
 
@@ -468,19 +507,19 @@
                 // Auto-Scroll Logic: Update Right
                 if (isFollowingRight && D.t.length > 0) {
                     const latestT = D.t[D.t.length - 1];
-                    // Calculate current window size
-                    const currentRange = cF.scales.x.max - cF.scales.x.min;
-                    
-                    // Shift window to end at latestT
-                    const newMax = latestT;
-                    const newMin = latestT - currentRange;
 
                     [cF, cR, cP].forEach(chart => {
-                        chart.options.scales.x.max = newMax;
-                        chart.options.scales.x.min = newMin;
+                        // Explicitly lock the currently visible left boundary
+                        if (chart.scales.x.min !== undefined) {
+                            chart.options.scales.x.min = chart.scales.x.min;
+                        }
+                        // Push the right boundary to the newest time point
+                        chart.options.scales.x.max = latestT;
                         chart.update('none');
                     });
                 }
+
+
 
                 setTimeout(() => led.classList.remove('blink'), 150);
             }
@@ -554,6 +593,21 @@
     }
 
 
+    function syncCharts({ chart }) {
+        const minX = chart.scales.x.min;
+        const maxX = chart.scales.x.max;
+        [cF, cR, cP].forEach(c => {
+            if (c && c !== chart) {
+                c.options.scales.x.min = minX;
+                c.options.scales.x.max = maxX;
+                c.update('none');
+            }
+        });
+    }
+
+  
+
+
     function initCharts() {
         // Base Configuration
         const getCommonOptions = (color) => ({
@@ -561,17 +615,28 @@
             maintainAspectRatio: false,
             animation: false,
             // Style from image: thicker lines, no points
-            elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0 } },
+elements: { point: { radius: 2, hitRadius: 4 }, line: { borderWidth: 1, tension: 0 } },
             scales: {
                 x: { 
                     type: 'linear', 
                     grid: { display: false }, 
                     ticks: { color: '#475569', font: { size: 11, weight: '600' }, maxTicksLimit: 8 } 
                 },
+
                 y: { 
-                    grid: { color: '#e2e8f0' }, // Subtle grid for Y-axis
-                    ticks: { color: '#475569', font: { size: 11, weight: '600' } } 
-                }
+    grid: { color: '#e2e8f0' }, 
+    ticks: { 
+        color: '#475569', 
+        font: { size: 11, weight: '600' },
+        callback: function(value) {
+            if (value === 0) return "0";
+            
+            return Number(value).toExponential(3).toUpperCase();
+        }
+    } 
+}
+
+
             },
         
             plugins: {
@@ -580,8 +645,9 @@
                     limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } },
                     pan: {
                         enabled: true,
-                        mode: 'xy',
+                        mode: 'x', // Changed from 'xy' to 'x'
                         modifierKey: 'shift',
+                        onPan: syncCharts, // Added sync trigger
                         onPanComplete: applyAutoCursors
                     },
                     zoom: {
@@ -594,11 +660,14 @@
                             borderWidth: 1,
                             threshold: 10
                         },
-                        mode: 'xy',
+                        mode: 'x', // Changed from 'xy' to 'x'
+                        onZoom: syncCharts, // Added sync trigger
                         onZoomComplete: applyAutoCursors
                     }
                 }
             }
+
+
         });
 
         // Frequency Chart... pas d'echelle X, osef
@@ -664,11 +733,24 @@
     }
 
 
-    function updateGraphs() {
-        const makeXY = (yArr) =>
-            D.t.map((t, i) => ({ x: t, y: yArr[i] }));
+function updateGraphs() {
+        if (D.t.length === 0) return;
 
-        cF.data.datasets[0].data = makeXY(D.f);
+        // 1. Safely find the minimum frequency for potentially large arrays
+        let minF = D.f[0];
+        for (let i = 1; i < D.f.length; i++) {
+            if (D.f[i] < minF) minF = D.f[i];
+        }
+
+        // 2. Update the header label with the baseline minimum
+        const lbl = document.getElementById('labelFreq');
+        if (lbl) lbl.innerText = `FREQUENCY (Hz) | Min: ${minF.toFixed(1)} + value`;
+
+        // 3. Map the offset data for the main plot, keep normal mapping for the others
+        const makeXYOffset = (yArr, offset) => D.t.map((t, i) => ({ x: t, y: yArr[i] - offset }));
+        const makeXY = (yArr) => D.t.map((t, i) => ({ x: t, y: yArr[i] }));
+
+        cF.data.datasets[0].data = makeXYOffset(D.f, minF);
         cR.data.datasets[0].data = makeXY(D.r);
         cP.data.datasets[0].data = makeXY(D.p);
 
@@ -681,7 +763,26 @@
         cP.update('none');
     }
 
-    function resetZoomAll() { cF.resetZoom(); cR.resetZoom(); cP.resetZoom(); applyAutoCursors(); }
+
+
+    function resetCursors() {
+    if (D.t.length === 0) return;
+    
+    // Get current visible boundaries, fallback to data limits if not zoomed
+    const minX = cF.scales.x.min !== undefined ? cF.scales.x.min : D.t[0];
+    const maxX = cF.scales.x.max !== undefined ? cF.scales.x.max : D.t[D.t.length - 1];
+
+    // Clamp to ensure we don't go out of absolute data bounds
+    cursorStart = Math.max(D.t[0], minX);
+    cursorEnd = Math.min(D.t[D.t.length - 1], maxX);
+
+    // Update lines and recalculate
+    cF.options.plugins.annotation.annotations.line1.value = cursorStart;
+    cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
+    cF.update('none');
+    
+    recalc();
+}
 
     function setupCursors() {
         const canvas = document.getElementById('chartF');
@@ -833,66 +934,86 @@
 
     function makePDF() {
         if (D.t.length === 0) return alert("No data.");
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
         
-        const now = new Date();
-        const dateStr = now.toISOString().replace(/T/, '_').replace(/:/g, '-').slice(0, 16);
-        const currentURL = window.location.href; // Get current URL
+        // 1. Visual Feedback for the Button
+        const btn = document.querySelector('.btn-report');
+        const origText = btn.innerText;
+        btn.innerText = "⏳ Generating Report...";
+        btn.style.backgroundColor = "var(--success)"; // Turns green
 
-        // Header
-        doc.setFontSize(22); doc.setTextColor(59, 130, 246); doc.text("QCM Laboratory Report", 15, 20);
-        doc.setFontSize(10); doc.setTextColor(80);
-        doc.text(`Program URL: ${currentURL}`, 15, 28); // Add URL here
-        doc.text(`Generated: ${now.toLocaleString()}`, 15, 33);
-        doc.text(`Filename: ${fileHandle ? fileHandle.name : "N/A"}`, 15, 38);
-        doc.line(15, 43, 195, 43);
+        // 2. Use setTimeout to allow the UI to update the button before the heavy PDF process locks the browser
+        setTimeout(() => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const now = new Date();
+            const dateStr = now.toISOString().replace(/T/, '_').replace(/:/g, '-').slice(0, 16);
+            const currentURL = window.location.href; 
 
-        // Section 1: Setup & Physics
-        doc.setFontSize(14); doc.setTextColor(0); doc.text("Experimental Parameters", 15, 53);
-        doc.setFontSize(11);
-        doc.text(`Crystal F0: ${document.getElementById('pF0').value} MHz`, 15, 61);
-        doc.text(`Diameter: ${document.getElementById('pDiam').value} mm`, 15, 67);
-        doc.text(`Material: ${document.getElementById('pMat').value}`, 80, 61);
-        doc.text(`Density: ${document.getElementById('pRho').value} g/cm³`, 80, 67);
-        doc.text(`Z-Factor: ${document.getElementById('pZ').value}`, 140, 61);
-        doc.text(`Method: ${document.getElementById('outMethod').innerText}`, 140, 67);
+            // Header
+            doc.setFontSize(22); doc.setTextColor(59, 130, 246); doc.text("QCM Laboratory Report", 15, 20);
+            doc.setFontSize(10); doc.setTextColor(80);
+            doc.text(`Program URL: ${currentURL}`, 15, 28); 
+            doc.text(`Generated: ${now.toLocaleString()}`, 15, 33);
+            doc.text(`Filename: ${fileHandle ? fileHandle.name : "N/A"}`, 15, 38);
+            doc.line(15, 43, 195, 43);
 
-        // Section 2: Cursor Analysis
-        doc.setFontSize(14); doc.text("Analysis Results (Cursor Window)", 15, 80);
-        doc.setFontSize(11);
-        doc.text(`Time Range: ${document.getElementById('outRange').innerText}`, 15, 88);
-        doc.text(`Final Thickness: ${document.getElementById('outThick').innerText} nm`, 15, 94);
-        doc.text(`Deposition Rate: ${document.getElementById('outRate').innerText} nm/s`, 15, 100);
-        doc.text(`Total Freq Shift: ${document.getElementById('outDf').innerText}`, 100, 88);
-        
-        // IFF Section
-        const refRate = document.getElementById('iffRef').value || "N/A";
-        doc.text(`IFF Ref Rate: ${refRate} nm/s`, 100, 94);
-        doc.setTextColor(16, 185, 129); // Green for IFF result
-        doc.text(`IFF Result: ${document.getElementById('iffOut').innerText}`, 100, 100);
-        doc.setTextColor(0);
+            // Section 1: Setup & Physics
+            doc.setFontSize(14); doc.setTextColor(0); doc.text("Experimental Parameters", 15, 53);
+            doc.setFontSize(11);
+            doc.text(`Crystal F0: ${document.getElementById('pF0').value} MHz`, 15, 61);
+            doc.text(`Diameter: ${document.getElementById('pDiam').value} mm`, 15, 67);
+            doc.text(`Material: ${document.getElementById('pMat').value}`, 80, 61);
+            doc.text(`Density: ${document.getElementById('pRho').value} g/cm³`, 80, 67);
+            doc.text(`Z-Factor: ${document.getElementById('pZ').value}`, 140, 61);
+            doc.text(`Method: ${document.getElementById('outMethod').innerText}`, 140, 67);
 
-        // Plots
-        let y = 115;
+            // Section 2: Cursor Analysis
+            doc.setFontSize(14); doc.text("Analysis Results (Cursor Window)", 15, 80);
+            doc.setFontSize(11);
+            doc.text(`Time Range: ${document.getElementById('outRange').innerText}`, 15, 88);
+            doc.text(`Final Thickness: ${document.getElementById('outThick').innerText} nm`, 15, 94);
+            doc.text(`Deposition Rate: ${document.getElementById('outRate').innerText} nm/s`, 15, 100);
+            doc.text(`Total Freq Shift: ${document.getElementById('outDf').innerText}`, 100, 88);
+            
+            // IFF Section
+            const refRate = document.getElementById('iffRef').value || "N/A";
+            doc.text(`IFF Ref Rate: ${refRate} nm/s`, 100, 94);
+            doc.setTextColor(16, 185, 129); 
+            doc.text(`IFF Result: ${document.getElementById('iffOut').innerText}`, 100, 100);
+            doc.setTextColor(0);
 
-        doc.setFontSize(12); doc.setTextColor(59, 130, 246); doc.text('Frequency Evolution (Hz)', 15, y);
-        const imgF = document.getElementById('chartF').toDataURL('image/png', 2.0);
-        doc.addImage(imgF, 'PNG', 15, y + 2, 180, 70);
+            // Plots
+            let y = 115;
 
-        y += 85;
+            // Find the Min Frequency again for the PDF label
+            let minF = D.f[0];
+            for (let i = 1; i < D.f.length; i++) {
+                if (D.f[i] < minF) minF = D.f[i];
+            }
 
-        doc.text('Resistance (Ohm)', 15, y);
-        const imgR = document.getElementById('chartR').toDataURL('image/png', 2.0);
-        doc.addImage(imgR, 'PNG', 15, y + 2, 85, 45);
+            doc.setFontSize(12); doc.setTextColor(59, 130, 246); 
+            doc.text(`Frequency Evolution (Hz) | Min: ${minF.toFixed(1)} + value`, 15, y);
+            const imgF = document.getElementById('chartF').toDataURL('image/png', 2.0);
+            doc.addImage(imgF, 'PNG', 15, y + 2, 180, 70);
 
-        doc.text('Phase Angle (Degrees)', 110, y);
-        const imgP = document.getElementById('chartP').toDataURL('image/png', 2.0);
-        doc.addImage(imgP, 'PNG', 110, y + 2, 85, 45);
+            y += 85;
 
-        doc.save(`QCM_Report_${dateStr}.pdf`);
+            doc.text('Resistance (Ohm)', 15, y);
+            const imgR = document.getElementById('chartR').toDataURL('image/png', 2.0);
+            doc.addImage(imgR, 'PNG', 15, y + 2, 85, 45);
+
+            doc.text('Phase Angle (Degrees)', 110, y);
+            const imgP = document.getElementById('chartP').toDataURL('image/png', 2.0);
+            doc.addImage(imgP, 'PNG', 110, y + 2, 85, 45);
+
+            doc.save(`QCM_Report_${dateStr}.pdf`);
+
+            // 3. Reset Button State
+            btn.innerText = origText;
+            btn.style.backgroundColor = "";
+        }, 50);
     }
-
 
     //drag and drop a file
 
