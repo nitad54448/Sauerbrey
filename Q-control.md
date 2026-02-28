@@ -130,7 +130,7 @@ Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece befor
 | :--- | :--- | :--- |
 | **Enable Node** | `/{dev}/sigouts/0/on` -> `1` | `/{dev}/sigouts/1/on` -> `1` |
 | **Routing** | `/{dev}/sigouts/0/enables/3` -> `1` | `/{dev}/sigouts/1/enables/7` -> `1` |
-| **Phase Node** | `/{dev}/demods/3/phaseshift` -> `0.0` | `/{dev}/demods/2/phaseshift` -> **`90.0` (Crucial)** |
+| **Phase Node** | `/{dev}/demods/3/phaseshift` -> `0.0` | `/{dev}/demods/2/phaseshift` -> `90.0` **(Crucial)** |
 
 * The nodes for signal outputs: ('sigouts/0/amplitudes/3', 0.1) and ('sigouts/1/amplitudes/7', 0.0)
 
