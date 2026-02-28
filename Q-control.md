@@ -1,7 +1,6 @@
 
 # Practical Guide: Active Q-Control on Zurich Instruments UHF
-Based on notes from R. Stomp see https://www.zhinst.com/europe/en/blogs/resonance-engineering-quality-factor-q-control-method
-
+Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europe/en/blogs/resonance-engineering-quality-factor-q-control-method).
 
 **Application:** QCM / Resonator Tracking with Active Damping  
 **Instrument:** Zurich Instruments UHFLI (UHF-Lock-in)  
@@ -52,7 +51,7 @@ We need to calibrate the relationship between the Q-Control P-gain ($K_p$) and t
     * **Safety check:** If the amplitude increases instead of decaying, we have crossed the lasing threshold. Abort the scan and force PID 3 Kp to 0.
     * Fit the valid decay curves to extract the time constant ($\tau$) and calculate the damping rate ($\Gamma$).
 
-### Step 4: Engage Steady State
+### Step 4: Engage steady-state
 Once the calibration scan is complete and we have the linear fit parameters ($\Gamma_{native}$ and $\alpha$), we can lock the system into its new Q-state.
 
 **1. Calculate Kp and apply Q-Control**
@@ -66,29 +65,33 @@ $$K_{p\_target} = \frac{\frac{\pi \cdot f_0}{Q_{target}} - \Gamma_{native}}{\alp
 **2. Scale the PLL (if used)**
 Changing the Q-factor directly alters the phase slope ($d\Theta/df$) near resonance. Lowering Q flattens the slope (requiring more PLL gain), while increasing Q steepens the slope (requiring less PLL gain). 
 Scale the PID 1 Proportional and Integral gains based on the Q-ratio to maintain your original tracking bandwidth:
+
 $$P_{new} = P_{native} \times \frac{Q_{native}}{Q_{target}}$$
+
 $$I_{new} = I_{native} \times \frac{Q_{native}}{Q_{target}}$$
+
 * Update PID 1 P-gain: `/{dev}/pids/0/p` -> $P_{new}$
 * Update PID 1 I-gain: `/{dev}/pids/0/i` -> $I_{new}$
+
 *(Note: the PLL and Q control will work together if the Osc2 follows the frequency of Osc1. This is pssible with the MF option or by referencing the Osc2 to have the Osc1 frequency, via ExtRef)*
 
 **3. Engage the AGC**
 Now that the active damping or enhancement has altered the natural amplitude, turn on the AGC to automatically adjust the drive voltage and hold the amplitude at your target setpoint. The setpoint for the PID4 should be the measured amplitude at the resonance point.
 * Enable PID 4: `/{dev}/pids/3/enable` -> `1`
 
-**4. Begin experiment**
-The multi-loop system should be fully locked, although sometimes igniting a plasma will break it ! 
+**4. Begin experiments**
+The multi-loop system should now be functional ! 
 
 
 ---
-## Q-Control Signal Flow Diagram
+## Q-Control flow diagram
 
 ![Q-Control Flow Diagram](q-control-flow.png)
 
 
-## Part 2: Hardware & System Topology
+## Part 2: Hardware & system topology
 
-### A. Hardware Wiring & Output Routing
+### A. Hardware wiring & routing
 * **Input Signal (`Signal Input 1`):** Resonator response. Feeds all four Demods.
 * **Drive Output (`Signal Output 1`):** Main excitation, controlled by PID 4 (AGC). Set Phase to an appopriate value. Routed to Oscillator 1.
 * **Q-Feedback (`Signal Output 2`):** Feedback force, controlled by PID 3 (Q-Control) (set demod 3 phase to 90.0 deg). **Must be explicitly routed to Oscillator 1. If this is not possible, the Osc 2 frequency must be set manually** 
@@ -96,7 +99,7 @@ The multi-loop system should be fully locked, although sometimes igniting a plas
 > **Hardware:** Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece before connecting to the resonator.
 
 
-### B. Settings (Example for 6 MHz, Q=50k)
+### B. Settings (example for 6 MHz, Q=50k)
 All Demods must be referenced to `Oscillator 1`. Enable data streaming ONLY for Demod 2 during the measurement phase (about 200 kSa/sec or more).
 
 | Demodulator | Role | `timeconstant` | `order` | Base Node Path |
@@ -107,13 +110,13 @@ All Demods must be referenced to `Oscillator 1`. Enable data streaming ONLY for 
 | **Demod 4** | **AGC Source** | `100e-3` | `4` | `/{dev}/demods/3/` |
 
 
-### C. Controller Configuration Reference (PIDs)
+### C. Controller configuration (PIDs)
 Configure the PID modules below. PID 2 is skipped. 
 
 | Parameter | PID 1 (`/{dev}/pids/0/`) | PID 3 (`/{dev}/pids/2/`) | PID 4 (`/{dev}/pids/3/`) |
 | :--- | :--- | :--- | :--- |
 | **Function** | Frequency Tracking | Active Q-Control | Amplitude Stability (AGC) |
-| **Target BW** | `50` to `100` Hz | **N/A (Pure P-controller)** | **`0.5` to `2.0` Hz (Slow)** |
+| **Target BW** | `50` to `100` Hz | N/A (Pure P-controller) | `0.5` to `2.0` Hz |
 | **Module Mode** | **PLL** | **PID** | **PID** |
 | **Input Node** | `.../input` (Demod 1 Phase) | `.../input` (Demod 3 R) | `.../input` (Demod 4 R) |
 | **Setpoint**| `.../setpoint` (Resonance Phase) | `.../setpoint` -> `0.0` | `.../setpoint` (Target Amp) |
@@ -123,7 +126,7 @@ Configure the PID modules below. PID 2 is skipped.
 | **D-Gain (Kd)** | `.../d` -> `0.0` | `.../d` -> `0.0` | `.../d` -> `0.0` |
 
 
-### D. Signal Output Routing & Phase Configuration
+### D. Signal Output routing & phase Configuration
 Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece before connecting to the resonator.
 
 | Parameter | Signal Output 1 (Main Drive) | Signal Output 2 (Q-Feedback) |
@@ -138,16 +141,16 @@ Physically sum `Signal Output 1` and `Signal Output 2` using a BNC T-piece befor
 
 ---
 
-## Part 3: Mathematical & Software Reference
+## Part 3: Mathematical & software reference
 
-### A. The Step-Response Fit 
+### A. The Step-Response fit 
 To extract the Q-factor, fit the transient amplitude data from Demod 2 to one or two exponential decays
 
 $$A(t) = A_0 \cdot e^{-t_0/\tau_0} + A_1 \cdot e^{-t_1/\tau_1} + C$$
 
 Here, $C$ represents an offset whose magnitude is related to the 50% (or whatever value) steady-state baseline. There might be a short peak just at the moment of changing the voltage. The data to fit must be only that of the decay, after this peak. There are several ways to do it, I implemented two methods in the v3 code.
 
-**Data slicing with Knee Detection:**
+**Data slicing with Knee detection:**
  To isolate the pure decay curve, if there is no peak when the SigOut 1 amplitude is changed, the Knee Detector works quite well.
 1.  Choose a sliding window size (N) of roughly 20 to 30 points (or approximating a few time delays of Demod 2 filter).
 2.  Slide two adjacent windows of size N across the amplitude array. Fit a simple linear regression to each window to extract their local slopes (m1 and m2).
@@ -155,7 +158,7 @@ Here, $C$ represents an offset whose magnitude is related to the 50% (or whateve
 4. Truncate the time and amplitude arrays starting from this index (or shift 5 to 10 points to the right to completely clear the filter's rounded shoulder). Subtract the first time value from the entire sliced time array so the pure transient fit starts at t=0.
 This method can be used whether or not the peak is present; if it is, a small number of points for the knee detector should be selected.
 
-**Data slicing with a MAx intensity value**
+**Data slicing with a Max intensity value**
 A simpler way, in the case of a peak appearing at the change of the amplitude, is to search for the maximum amplitude and get only the data after this point. 
 To prevent getting a spurious point as a maximum, it is better to make averages of a small subsets of 3-5 points, slide these, and search for the max average. 
 This method will not work if there is no peak at the moment of ring down.
@@ -169,30 +172,30 @@ At the time of this writting, my tests gave timeconstants *smaller* than expecte
 $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
 
-### B. Calibration and Dynamic Safety Logic
+### B. Calibration and safety limits
 
 The PID 3 P-gain (Kp) can be used to either decrease or increase the Q-factor. Based on the negative slope fit shown in the calibration, the relationship between Kp and the effective system damping (Gamma) is:
 Gamma(Kp) = Gamma_native - (alpha * Kp)
 
 Where Gamma_native (the y-intercept) is your natural damping, and alpha is the magnitude of the slope obtained by fitting the extracted damping rates against your scanned Kp values.
 
-* **Active Damping (Lowering Q):** Kp < 0. Adds artificial viscous damping.
+* **Active damping (Lowering Q):** Kp < 0. Adds artificial viscous damping.
 * **Q-Enhancement (Increasing Q):** Kp > 0. Counteracts natural damping.
 
-**Reaching the Target Q:**
+**Reaching the target Q:**
 Once the calibration scan is complete and your slope alpha is accurately fitted, calculate the exact Kp required for your target Q:
 Kp_target = (Gamma_native - (pi * f0 / Q_target)) / alpha
 
 
 **Lasing limit**
 When enhancing the Q-factor we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
-* **Lasing Threshold:** Kp_lasing = -(Gamma_native / alpha)
-* **Dynamic Limit:** When automating a scan for Q-enhancement, calculate a preliminary fit and cap your negative Kp array at 80% to 90% of Kp_lasing.
-* **Hardware Limits:** Apply the hardware limits (`pids/2/limitlower` and `limitupper` to reasonable vlaues, e.g. -0.25 and 0.25 V) to act as physical fail-safe against lasing (in the negative direction) or output saturation (in the positive direction).
+* **Lasing threshold:** Kp_lasing = -(Gamma_native / alpha)
+* **Dynamic limit:** When automating a scan for Q-enhancement, calculate a preliminary fit and cap your negative Kp array at 80% to 90% of Kp_lasing.
+* **Hardware limits:** Apply the hardware limits (`pids/2/limitlower` and `limitupper` to reasonable vlaues, e.g. -0.25 and 0.25 V) to act as physical fail-safe against lasing (in the negative direction) or output saturation (in the positive direction).
 
 ---
 
-## Demodulator Settings for HIPIMS DAQ Operation
+## Demodulator settings for HIPIMS DAQ operation
 
 **Application:** HIPIMS (High Power Impulse Magnetron Sputtering) with  
 - PLL active  
@@ -206,18 +209,18 @@ The goal is to capture fast plasma transients while maintaining stable multi-loo
 
 ---
 
-### Recommended Demodulator Configuration
+### Recommended demodulator configuration
 
 | Demodulator | Role | Recommended Time Constant | Filter Order | Purpose |
 |-------------|------|--------------------------|--------------|---------|
 | **Demod 1** | **PLL Source** | **0.3 to 1 ms** | 4 | Stable phase tracking without reacting to plasma spikes. |
-| **Demod 2** | **DAQ Measurement** | **0.1 to 10 us** | **1 (Critical)** | High temporal resolution, minimal filter delay for transient capture. |
+| **Demod 2** | **DAQ Measurement** | **0.1 to 10 us** | 1 | High temporal resolution, minimal filter delay for transient capture. |
 | **Demod 3** | **Q-Control Source** | **20 to 50 us** | 4 | Fast damping/enhancement control without noise amplification. |
 | **Demod 4** | **AGC Source** | **50 to 200 ms** | 4 | Slow amplitude stabilization; must not follow pulses. |
 
 ---
 
-### Loop Hierarchy Requirement
+### Loop Hierarchy requirement
 
 For stable multi-loop operation, the time constants (TC) must be decoupled:
 
@@ -238,7 +241,7 @@ Thus, during HIPIMS operation:
 
 ---
 
-### Important Measurement Note
+### Measurement notes
 
 While Q-control is engaged, the measured damping is:
 
@@ -251,7 +254,7 @@ Thus, during HIPIMS operation:
 
 ---
 
-### Design Rationale
+### Design rationale
 
 #### Demod 1 — PLL Source
 The PLL must track real frequency shifts but ignore fast plasma-induced noise.
@@ -300,7 +303,7 @@ Example:
 
 ---
 
-### Loop Hierarchy Requirement
+### Loop hierarchy
 
 For stable multi-loop operation:
 
@@ -310,7 +313,7 @@ Fast → Slow ordering prevents loop interaction and instability.
 
 ---
 
-### Important Measurement Note
+### Important measurement note
 
 While Q-control is engaged, the measured damping is:
 
