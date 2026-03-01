@@ -28,13 +28,13 @@ Before engaging any control loops, we must find the resonance state of the QCM. 
 We need to calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By performing a frequency sweep across the resonance at different $K_p$ values, we can extract the Q-factor directly from steady-state measurements, completely bypassing the peak charge/discharge transient.
 
 1. Ensure PID 1 (PLL) is disabled, as the lock-in will conflict with the manual sweep sequencer. Because the PLL is temporarily off, we will use **Demod 1** to record the sweep data. This keeps **Demod 2** completely free for continuous DAQ measurements.
-2. Ensure PID 3 P-gain starts at 0.
+2. Set the **Demod 8** to have the same parameters as **Demod 1** 
 3. Define a safe $K_p$ scan array (e.g., -10.0 to 10.0, increase it in subsecvent trials) for the PID3. Put lower limit and upper limit to about -0.25V and 0.25V.
    **Enable PID 3** (`pids/2/enable -> 1`).
 4. **For each $K_p$ value in the array:**
 
     * Apply $K_p$ to PID 3, and wait 500-1000 ms for the system to settle.
-    * Run a frequency sweep across the resonance, recording the amplitude and phase data from **Demod 1**. Both Osc 1 and Osc 2 must sweep at the same time to maintain identical frequencies.
+    * Run a frequency sweep across the resonance, recording the amplitude and phase data from **Demod 1**. Both Osc 1 and Osc 2 (demod 8) must sweep at the same time to maintain identical frequencies on sigOut 1 and SigOut 2. Both Demods should have identical parameters.
     * Fit the Demod 1 sweep data to extract the Q-factor (e.g., using a Lorentz or Pratt circle fit). 
     * Calculate the effective damping rate for this $K_p$ step: $\Gamma = \frac{\pi \cdot f_0}{Q}$.
 
