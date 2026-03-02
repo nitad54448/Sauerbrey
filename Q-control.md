@@ -11,14 +11,17 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 
 ```mermaid
 graph TD
-    %% Input Layer
-    SigIn[Signal Input 1<br>Response Signal] --> Res(Resonator)
-    Res --> Splitter((Internal<br>Routing))
+    %% Physical Hardware Summation & Input
+    SigOut1[Signal Output 1<br>Main Drive Voltage] --> Sum((Sum Signals<br>BNC T-piece))
+    SigOut2[Signal Output 2<br>Feedback Force] --> Sum
+    Sum -->|Drive + Feedback| Res(Resonator)
+    Res --> SigIn[Signal Input 1<br>Response Signal]
+    SigIn --> Splitter((Internal<br>Routing))
 
     %% Demodulators
     Splitter --> D1[Demod 1: Phase]
     Splitter --> D2[Demod 2: Amplitude<br>DAQ / Ring-down]
-    Splitter --> D3[Demod 3: R]
+    Splitter --> D3[Demod 3: R<br>90° Phase Shift]
     Splitter --> D4[Demod 4: R]
 
     %% PIDs
@@ -26,16 +29,11 @@ graph TD
     D3 --> P3[PID 3: Q-Control<br>Setpoint: 0.0 V]
     D4 --> P4[PID 4: AGC<br>Setpoint: Target R]
 
-    %% Outputs
+    %% Outputs closing the loop
     P1 --> Osc1[Oscillator 1 Frequency]
-    P3 --> SigOut2[Signal Output 2<br>Feedback Force]
-    P4 --> SigOut1[Signal Output 1<br>Main Drive Voltage]
+    P3 --> SigOut2
+    P4 --> SigOut1
 
-    %% Physical Hardware Summation
-    SigOut1 --> Sum((Sum Signals<br>BNC T-piece))
-    SigOut2 --> Sum
-    Sum -.->|Physical Feedback| Res
-    
     classDef pid1 fill:#2ca02c,stroke:#333,stroke-width:2px,color:#fff;
     classDef pid3 fill:#1f77b4,stroke:#333,stroke-width:2px,color:#fff;
     classDef pid4 fill:#ff7f0e,stroke:#333,stroke-width:2px,color:#fff;
