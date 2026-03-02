@@ -12,7 +12,6 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 ![Q-Control Flow Diagram](q-control-flow.png)
 
 
-```mermaid
 graph TD
     %% Input Layer
     SigIn[Signal Input 1<br>Response Signal] --> Res(Resonator)
@@ -48,14 +47,14 @@ graph TD
     class P3 pid3;
     class P4 pid4;
     class D1,D2,D3,D4 demod;
+```
 
----
 
 ## Part 1: The workflow
 
 This section outlines the logical sequence to initialize the system, calibrate the active damping, and lock the resonator for measurement. It is supposed to make a Q-control system for a QCM resonator. In this description, the PLL is activated first then the Q parameters are found, but Q control can be made without the PLL, or the PLL can be engaged after the Q-control enabled (I did not try this yet though).
-Note that in order to achieve PLL with a different Q, we'll need the option MF-MD, so that the Sigout2 be assigned to the frequency of OSC1. This is required because the PID3 uses Sigout2.  
-The program we use was initially made for a DAQ measurement on the demod 2 with a PLL on demod 1. So, building on that, we'll keep the demod 2 for fast measurements, 1 for PLL anddemods 3 and 4 for Q-control. Obviously, other setups can me made, this is more of a ledger for our in-house work. 
+Note that in order to achieve PLL with a different Q, we'll need the option MF-MD, so that the SigOut2 be assigned to the frequency of Osc1. This is required because the PID3 uses SigOut2.  
+The program we use was initially made for a DAQ measurement on the demod 2 with a PLL on Demod 1. So, building on that, we'll keep the Demod 2 for fast measurements, 1 for PLL and demods 3 and 4 for Q-control. Obviously, other setups can me made, this is more of a ledger for our in-house work. 
 
 
 ### Step 1: Initial sweep 
