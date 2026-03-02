@@ -9,9 +9,6 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 ---
 ## Q-Control diagram for this guide
 
-![Q-Control Flow Diagram](q-control-flow.png)
-
-
 ```mermaid
 graph TD
     %% Input Layer
