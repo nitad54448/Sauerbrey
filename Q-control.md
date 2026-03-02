@@ -10,46 +10,69 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 ## Q-Control diagram for this guide
 
 ```mermaid
+
 graph TD
-    %% Define top-level nodes first to lock them at the top
+    %% ====== TOP OUTPUTS ======
     SigOut1[Signal Output 1<br>Main Drive Voltage]
     SigOut2[Signal Output 2<br>Feedback Force]
+    SigOut1 --- SigOut2
+    linkStyle 0 stroke:none
 
-    %% Physical Signal Flow (Top to Bottom)
+    %% ====== PHYSICAL PATH ======
     SigOut1 --> Sum((Sum Signals<br>BNC T-piece))
     SigOut2 --> Sum
     Sum -->|Drive + Feedback| Res(Resonator)
     Res --> SigIn[Signal Input 1<br>Response Signal]
     SigIn --> Splitter((Internal<br>Routing))
 
-    %% Demodulation
-    Splitter --> D1[Demod 1: Phase]
-    Splitter --> D2[Demod 2: Amplitude<br>DAQ / Ring-down]
-    Splitter --> D3[Demod 3: R<br>90° Phase Shift]
-    Splitter --> D4[Demod 4: R]
+    %% ====== DEMODS ======
+    Splitter --> D1[Demod 1<br>Phase (PLL)]
+    Splitter --> D2[Demod 2<br>Amplitude (DAQ)]
+    Splitter --> D3[Demod 3<br>R (90°) Q-Control]
+    Splitter --> D4[Demod 4<br>R (AGC)]
 
-    %% PID Controllers
-    D1 --> P1[PID 1: PLL<br>Setpoint: Phase @ f0]
-    D3 --> P3[PID 3: Q-Control<br>Setpoint: 0.0 V]
-    D4 --> P4[PID 4: AGC<br>Setpoint: Target R]
+    %% ====== PID CONTROLLERS ======
+    D1 --> P1[PID 1<br>PLL]
+    D3 --> P3[PID 3<br>Q-Control]
+    D4 --> P4[PID 4<br>AGC]
 
-    %% Frequencies and Sync
+    %% ====== FREQUENCY ======
     P1 --> Osc1[Oscillator 1 Frequency]
-    Osc1 -.->|Syncs to| Osc2[Oscillator 2 Frequency]
+    Osc1 -.->|Sync| Osc2[Oscillator 2 Frequency]
 
-    %% Control Loop Feedback (Bottom back to Top)
-    P4 -.->|Controls Amplitude| SigOut1
-    P3 -.->|Controls Amplitude| SigOut2
+    %% ====== CONTROL FEEDBACK ======
+    P4 -.->|Amplitude Control| SigOut1
+    P3 -.->|Damping Control| SigOut2
 
-    classDef pid1 fill:#2ca02c,stroke:#333,stroke-width:2px,color:#fff;
-    classDef pid3 fill:#1f77b4,stroke:#333,stroke-width:2px,color:#fff;
-    classDef pid4 fill:#ff7f0e,stroke:#333,stroke-width:2px,color:#fff;
-    classDef demod fill:#e0e0e0,stroke:#888,stroke-width:1px;
-    
-    class P1 pid1;
-    class P3 pid3;
-    class P4 pid4;
+    %% ====== NODE STYLES ======
+    classDef physical fill:#ffffff,stroke:#000000,stroke-width:2px;
+    classDef demod fill:#e8e8e8,stroke:#888,stroke-width:1px;
+
+    %% Main Drive / AGC loop (Green)
+    classDef drive fill:#2ca02c,color:#ffffff,stroke:#1e7d1e,stroke-width:2px;
+
+    %% Q-Control loop (Blue)
+    classDef qctrl fill:#1f77b4,color:#ffffff,stroke:#14507a,stroke-width:2px;
+
+    %% PLL only (lighter green)
+    classDef pll fill:#6ccf6c,color:#ffffff,stroke:#2f8f2f,stroke-width:2px;
+
+    %% ====== APPLY NODE STYLES ======
+    class SigOut1,Osc1,P4 drive;
+    class SigOut2,Osc2,P3 qctrl;
+    class P1 pll;
     class D1,D2,D3,D4 demod;
+    class Sum,Res,SigIn,Splitter physical;
+
+    %% ====== COLORED LINKS ======
+    %% Index numbers may vary slightly depending on renderer
+    linkStyle 11 stroke:#6ccf6c,stroke-width:2px;             %% D1->P1
+    linkStyle 14 stroke:#2ca02c,stroke-width:2px;             %% D4->P4
+    linkStyle 16 stroke:#2ca02c,stroke-width:2px,stroke-dasharray: 5 5; %% P4->SigOut1
+    linkStyle 13 stroke:#1f77b4,stroke-width:2px;             %% D3->P3
+    linkStyle 17 stroke:#1f77b4,stroke-width:2px,stroke-dasharray: 5 5; %% P3->SigOut2
+    linkStyle 15 stroke:#2ca02c,stroke-width:2px;             %% P1->Osc1
+    linkStyle 12 stroke:#1f77b4,stroke-width:2px,stroke-dasharray: 3 3; %% Osc1->Osc2
 
 ```
 
