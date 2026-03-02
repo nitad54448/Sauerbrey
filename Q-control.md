@@ -12,6 +12,7 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 ![Q-Control Flow Diagram](q-control-flow.png)
 
 
+```mermaid
 graph TD
     %% Input Layer
     SigIn[Signal Input 1<br>Response Signal] --> Res(Resonator)
