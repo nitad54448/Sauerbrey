@@ -7,6 +7,11 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 **Topology:** 4-Demodulator "Mnemonic" Setup (1=PLL, 2=Measurement, 3=Q, 4=AGC)  
 
 ---
+## Q-Control diagram for this guide
+
+![Q-Control Flow Diagram](q-control-flow.png)
+
+---
 
 ## Part 1: The workflow
 
@@ -88,10 +93,6 @@ The multi-loop system should now be functional !
 
 
 ---
-## Q-Control flow diagram
-
-![Q-Control Flow Diagram](q-control-flow.png)
-
 
 ## Part 2: Hardware & system topology
 
