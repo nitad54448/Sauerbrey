@@ -16,6 +16,7 @@ graph TD
     SigOut1[Signal Output 1<br>Main Drive Voltage]
     SigOut2[Signal Output 2<br>Feedback Force]
     SigOut1 --- SigOut2
+    linkStyle 0 stroke:none
 
     %% ====== PHYSICAL PATH ======
     SigOut1 --> Sum((Sum Signals<br>BNC T-piece))
@@ -46,17 +47,21 @@ graph TD
     %% ====== NODE STYLES ======
     classDef physical fill:#ffffff,stroke:#000000,stroke-width:2px;
     classDef demod fill:#e8e8e8,stroke:#888,stroke-width:1px;
-
-    classDef drive fill:#2ca02c,color:#ffffff,stroke:#1e7d1e,stroke-width:2px;
+    classDef pll fill:#2ca02c,color:#ffffff,stroke:#1e7d1e,stroke-width:2px;
     classDef qctrl fill:#1f77b4,color:#ffffff,stroke:#14507a,stroke-width:2px;
-    classDef pll fill:#6ccf6c,color:#ffffff,stroke:#2f8f2f,stroke-width:2px;
+    classDef agc fill:#ff7f0e,color:#ffffff,stroke:#b35600,stroke-width:2px;
 
-    %% Apply node styles
-    class SigOut1,Osc1,P4 drive;
-    class SigOut2,Osc2,P3 qctrl;
-    class P1 pll;
+    %% ====== APPLY STYLES ======
+    class SigOut1,SigOut2,Sum,Res,SigIn,Splitter physical;
     class D1,D2,D3,D4 demod;
-    class Sum,Res,SigIn,Splitter physical;
+    class P1,Osc1 pll;
+    class P3 qctrl;
+    class P4 agc;
+
+    %% ====== COLORED CONTROL LINKS ======
+    linkStyle 11 stroke:#2ca02c,stroke-width:2px;
+    linkStyle 13 stroke:#ff7f0e,stroke-width:2px,stroke-dasharray: 5 5;
+    linkStyle 14 stroke:#1f77b4,stroke-width:2px,stroke-dasharray: 5 5;
 ```
 
 
