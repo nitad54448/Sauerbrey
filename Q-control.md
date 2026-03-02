@@ -11,28 +11,35 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 
 ```mermaid
 graph TD
-    %% Physical Hardware Summation & Input
-    SigOut1[Signal Output 1<br>Main Drive Voltage] --> Sum((Sum Signals<br>BNC T-piece))
-    SigOut2[Signal Output 2<br>Feedback Force] --> Sum
+    %% Define top-level nodes first to lock them at the top
+    SigOut1[Signal Output 1<br>Main Drive Voltage]
+    SigOut2[Signal Output 2<br>Feedback Force]
+
+    %% Physical Signal Flow (Top to Bottom)
+    SigOut1 --> Sum((Sum Signals<br>BNC T-piece))
+    SigOut2 --> Sum
     Sum -->|Drive + Feedback| Res(Resonator)
     Res --> SigIn[Signal Input 1<br>Response Signal]
     SigIn --> Splitter((Internal<br>Routing))
 
-    %% Demodulators
+    %% Demodulation
     Splitter --> D1[Demod 1: Phase]
     Splitter --> D2[Demod 2: Amplitude<br>DAQ / Ring-down]
     Splitter --> D3[Demod 3: R<br>90° Phase Shift]
     Splitter --> D4[Demod 4: R]
 
-    %% PIDs
+    %% PID Controllers
     D1 --> P1[PID 1: PLL<br>Setpoint: Phase @ f0]
     D3 --> P3[PID 3: Q-Control<br>Setpoint: 0.0 V]
     D4 --> P4[PID 4: AGC<br>Setpoint: Target R]
 
-    %% Outputs closing the loop
+    %% Frequencies and Sync
     P1 --> Osc1[Oscillator 1 Frequency]
-    P3 --> SigOut2
-    P4 --> SigOut1
+    Osc1 -.->|Syncs to| Osc2[Oscillator 2 Frequency]
+
+    %% Control Loop Feedback (Bottom back to Top)
+    P4 -.->|Controls Amplitude| SigOut1
+    P3 -.->|Controls Amplitude| SigOut2
 
     classDef pid1 fill:#2ca02c,stroke:#333,stroke-width:2px,color:#fff;
     classDef pid3 fill:#1f77b4,stroke:#333,stroke-width:2px,color:#fff;
@@ -43,6 +50,7 @@ graph TD
     class P3 pid3;
     class P4 pid4;
     class D1,D2,D3,D4 demod;
+
 ```
 
 
