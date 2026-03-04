@@ -7,14 +7,12 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 **Topology:** 4-Demodulator "Mnemonic" Setup (1=PLL, 2=Measurement, 3=Q, 4=AGC)  
 
 ---
-## Q-Control diagram for this guide
-![Connections](q-control-flow.png)
 
 ## Part 1: The workflow
 
 This section outlines the logical sequence to initialize the system, calibrate the active damping, and lock the resonator for measurement. It is supposed to make a Q-control system for a QCM resonator. In this description, the PLL is activated first then the Q parameters are found, but Q control can be made without the PLL, or the PLL can be engaged after the Q-control enabled (I did not try this yet though).
-Note that in order to achieve PLL with a different Q, we'll need the option MF-MD, so that the SigOut2 be assigned to the frequency of Osc1. This is required because the PID3 uses SigOut2.  
-The program we use was initially made for a DAQ measurement on the demod 2 with a PLL on Demod 1. So, building on that, we'll keep the Demod 2 for fast measurements, 1 for PLL and demods 3 and 4 for Q-control. Obviously, other setups can me made, this is more of a ledger for our in-house work. 
+Note that in order to achieve PLL with a different Q, we'll need the option MF-MD, so that the Sigout2 be assigned to the frequency of OSC1. This is required because the PID3 uses Sigout2.  
+The program we use was initially made for a DAQ measurement on the demod 2 with a PLL on demod 1. So, building on that, we'll keep the demod 2 for fast measurements, 1 for PLL anddemods 3 and 4 for Q-control. Obviously, other setups can me made, this is more of a ledger for our in-house work. 
 
 
 ### Step 1: Initial sweep 
@@ -37,7 +35,7 @@ Before engaging any control loops, we must find the resonance state of the QCM. 
 We need to calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By stepping down the drive amplitude to half (or 33%), the resonator undergoes a transient decay to a new steady state. Because the signal never drops into the noise floor, the PLL should remain locked throughout the measurement, if it is enabled.
 
 In my case the demodulators look like this:
-![Lock in state](lock-in-q.png)
+![Lock in state](lock-ins-Q.png)
 
 1. Ensure PID 3 P-gain starts at 0.
 2. Define a safe $K_p$ scan array (e.g., -10.0 to to 10.0, increase it in subsecvent trials) for the PID3. Put lower limit and upper limit to about -0.25V and 0.25V.
@@ -90,6 +88,10 @@ The multi-loop system should now be functional !
 
 
 ---
+## Q-Control flow diagram
+
+![Q-Control Flow Diagram](q-control-flow.png)
+
 
 ## Part 2: Hardware & system topology
 
@@ -177,26 +179,133 @@ $$\text{Calculate Damping: } \Gamma = \frac{1}{\tau} = \frac{\pi \cdot f_0}{Q}$$
 
 ### B. Calibration and safety limits
 
-The PID 3 P-gain (Kp) can be used to either decrease or increase the Q-factor. Based on the negative slope fit shown in the calibration, the relationship between Kp and the effective system damping (Gamma) is:
-Gamma(Kp) = Gamma_native - (alpha * Kp)
+The PID 3 P-gain (Kp) modifies the effective mechanical damping of the resonator.
 
-Where Gamma_native (the y-intercept) is your natural damping, and alpha is the magnitude of the slope obtained by fitting the extracted damping rates against your scanned Kp values.
+The relationship between Kp and damping must be determined experimentally from the calibration scan. Do not assume its sign.
 
-* **Active damping (Lowering Q):** Kp < 0. Adds artificial viscous damping.
-* **Q-Enhancement (Increasing Q):** Kp > 0. Counteracts natural damping.
+From the scan, extract Γ for each Kp and perform a linear fit:
 
-**Reaching the target Q:**
-Once the calibration scan is complete and your slope alpha is accurately fitted, calculate the exact Kp required for your target Q:
-Kp_target = (Gamma_native - (pi * f0 / Q_target)) / alpha
+Γ(Kp) = Γ_native + α · Kp
 
+Where:
 
-**Lasing limit**
-When enhancing the Q-factor we risk pushing the total damping to zero, causing the amplitude to grow exponentially (Lasing). For active damping (Kp > 0), this physical limit does not apply.
-* **Lasing threshold:** Kp_lasing = -(Gamma_native / alpha)
-* **Dynamic limit:** When automating a scan for Q-enhancement, calculate a preliminary fit and cap your negative Kp array at 80% to 90% of Kp_lasing.
-* **Hardware limits:** Apply the hardware limits (`pids/2/limitlower` and `limitupper` to reasonable vlaues, e.g. -0.25 and 0.25 V) to act as physical fail-safe against lasing (in the negative direction) or output saturation (in the positive direction).
+- Γ_native is the damping at Kp = 0 (y-intercept)
+- α is the fitted slope (it may be positive or negative)
+
+The fitted α automatically captures the full feedback polarity, including:
+
+- Demod 3 phase shift
+- PID 3 polarity
+- Signal summing polarity
+- Cabling inversion
+- Oscillator routing
+
+Do not hard-code assumptions such as:
+- “Kp < 0 means damping”
+- “Kp > 0 means enhancement”
+
+The experiment determines the physics.
 
 ---
+
+#### Physical interpretation
+
+- If α > 0 → Increasing Kp increases damping.
+- If α < 0 → Increasing Kp reduces damping (Q-enhancement).
+
+---
+
+#### Reaching the target Q
+
+Target damping:
+
+Γ_target = π f0 / Q_target
+
+Using the fitted model:
+
+Γ(Kp) = Γ_native + α · Kp
+
+Solve for the required gain:
+
+Kp_target = (Γ_target − Γ_native) / α
+
+---
+
+#### Lasing limit
+
+Lasing occurs when total damping becomes zero:
+
+0 = Γ_native + α · Kp_lasing
+
+Therefore:
+
+Kp_lasing = − Γ_native / α
+
+When scanning toward enhancement, never exceed 80–90% of |Kp_lasing|.
+
+---
+
+#### Hardware limits
+
+Apply hardware limits:
+
+pids/2/limitlower  
+pids/2/limitupper  
+
+Example: −0.25 V to +0.25 V
+
+These act as a fail-safe against lasing or output saturation.
+
+### Reaching the target Q
+
+Using the experimentally determined linear relation:
+
+Γ(Kp) = Γ_native + α · Kp
+
+and
+
+Γ_target = π f0 / Q_target
+
+the required gain is:
+
+Kp_target = (Γ_target − Γ_native) / α
+
+This formula is valid for both damping and enhancement, regardless of the sign of α.
+
+---
+
+### Lasing limit
+
+Lasing occurs when total damping reaches zero:
+
+Γ = 0
+
+Using the fitted model:
+
+0 = Γ_native + α · Kp_lasing
+
+Therefore:
+
+Kp_lasing = − Γ_native / α
+
+When scanning toward Q-enhancement, never exceed 80–90% of |Kp_lasing|.
+
+---
+
+### Hardware safety limits
+
+Apply hardware voltage limits to PID 3:
+
+pids/2/limitlower  
+pids/2/limitupper  
+
+Example: −0.25 V to +0.25 V
+
+These limits act as a fail-safe against:
+
+- Lasing (if damping crosses zero)
+- Output saturation
+- Excessive feedback force
 
 ## Demodulator settings for HIPIMS DAQ operation
 
@@ -235,20 +344,7 @@ Fast-to-Slow ordering prevents loop interaction and instability.
 
 While Q-control is engaged, the measured damping is:
 
-Gamma_effective = Gamma_native + (alpha * Kp)
-
-Thus, during HIPIMS operation:
-* Frequency shifts are physically meaningful and reflect real mass/stress changes.
-* Measured Q reflects the actively controlled system, not the native plasma damping.
-* To measure native plasma-induced damping, you must disable PID 3 and observe the passive ring-down.
-
----
-
-### Measurement notes
-
-While Q-control is engaged, the measured damping is:
-
-Gamma_effective = Gamma_native + (alpha * Kp)
+Γ_effective = Γ_native + α · Kp
 
 Thus, during HIPIMS operation:
 * Frequency shifts are physically meaningful and reflect real mass/stress changes.
