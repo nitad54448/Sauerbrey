@@ -29,7 +29,7 @@ Before engaging any control loops, we must find the resonance state of the QCM. 
 2. Apply the polarity rule: If your phase slope is Normal, use Negative P and I gains (those given by Advisor). If it is Inverted, use Positive P and I gains (i.e. invert the values given by the Advisor). **D-Gain is usually 0.**
 3. Apply the measured phase setpoint from Step 1 to PID 1.
 4. Enable PID 1 (in PLL mode). The lock-in will now continuously track the resonance frequency (for measuring during the deposition increase the lowlimit value). The Phase Locked Loop (PLL) must remain active. If PLL is lost, check the BW parameters, cables, noise ?
-5. Set the osc 2 to the same frequency as osc 1: ('/oscs/1/freq', value), or assign SigOut 2 to Osc 1.
+5. Set the osc 2 to the same frequency as osc 1: ('/oscs/1/freq', value), or assign SigOut 2 to Osc 1. **This should be done before engaging the PLL.**
 
 ### Step 3: Q-Calibration & scanning (PID 3)
 We need to calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By stepping down the drive amplitude to half (or 33%), the resonator undergoes a transient decay to a new steady state. Because the signal never drops into the noise floor, the PLL should remain locked throughout the measurement, if it is enabled.
@@ -215,36 +215,6 @@ The experiment determines the physics.
 
 ---
 
-#### Reaching the target Q
-
-Target damping:
-
-Γ_target = π f0 / Q_target
-
-Using the fitted model:
-
-Γ(Kp) = Γ_native + α · Kp
-
-Solve for the required gain:
-
-Kp_target = (Γ_target − Γ_native) / α
-
----
-
-#### Lasing limit
-
-Lasing occurs when total damping becomes zero:
-
-0 = Γ_native + α · Kp_lasing
-
-Therefore:
-
-Kp_lasing = − Γ_native / α
-
-When scanning toward enhancement, never exceed 80–90% of |Kp_lasing|.
-
----
-
 #### Hardware limits
 
 Apply hardware limits:
@@ -416,7 +386,7 @@ Fast → Slow ordering prevents loop interaction and instability.
 
 While Q-control is engaged, the measured damping is:
 
-$\Gamma_{effective} = \Gamma_{native} - \alpha \cdot K_p$
+$\Gamma_{effective} = \Gamma_{native} + \alpha \cdot K_p$
 
 Thus, during HIPIMS operation:
 - Frequency shifts are physically meaningful.
