@@ -55,9 +55,10 @@ Dedicated to active dissipation control or monitoring change in the damping of t
 Configures high-speed data capture for transient events.
 
 * **Acquire / DAQ Points:** Defines the number of points per trigger.
-* **Trigger:** Set the source (e.g., Trigger 3) and the **Level (V)** at which data recording starts.
-* **TC /usec:** The time constant for the digital filter.
-* **Interval:** Time between automated successive measurements.
+* **Trigger:** Set the source (e.g., Trigger 3) at which data recording starts.
+* **TC /usec:** The time constant for the digital filter for the Demods 2.
+
+  The duration of the measurement is automatically established based on the number of points and the demodulator transfer rate.
 
 ---
 
