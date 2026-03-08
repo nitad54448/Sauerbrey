@@ -13,7 +13,7 @@ The entry point of the application for hardware communication and configuration 
 * **Load/Save cfg:** Allows importing or exporting instrument settings via `.xml` files. The files saved from the LabOne interface can be used here.
 * **Continue (Arrow):** Advances the workflow to the Sweep tab. This option is not active until a valid conection is established with the instrument.
 
-Be sure to load the correct configuration file for the experiment, or adapt in the LabOne UI the parameters that are good for the type of measurement.
+Be sure to load the correct configuration file for the experiment, or adapt in the LabOne UI the parameters that are good for the type of measurement. Plotter is often started by default, so stop it before going further.
 
 ---
 
