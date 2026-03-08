@@ -65,7 +65,9 @@ This is a Gated measurement, the data is transferred only when the Trigger3 is i
 
 * **Points:** Defines the number of points to acquire; the smallest number is 4096.
 * **Trigger:** Set the source (e.g., Trigger 1) at which data recording starts.
+
 ![Channels](images/scope_2.png)
+
 ![Trigger](images/scope_3.png)
  
 * **TC /usec:** The time constant for the digital filter for the Demods 2.
