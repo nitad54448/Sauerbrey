@@ -27,7 +27,8 @@ Used to characterize the resonator's resonance frequency ($f_0$) and Quality Fac
     * **freq_0 ($f_0$):** Center resonance frequency.
     * **BW:** Bandwidth at half-maximum.
     * **Q:** The Quality factor ($f_0 / BW$).
-### Configuration file: PLL or PLL_Scope
+Configuration file: PLL or PLL_Scope
+Note, a Lorentz fit and a Pratt circle fit will be made at the end of the scan. The parameters that will be considered when passing to the next step will be either Lorentz or Pratt, whichever is selected (e.g. visible).
 ---
 
 ## 3. Track f (Frequency Tracking)
@@ -35,11 +36,11 @@ The core real-time measurement tab using a PID loop to lock onto the resonance f
 
 * **Track f0 / ph:** Displays the current locked frequency and phase setpoint.
 * **PID mode:** Usually set to **PI** for frequency tracking. 
-* **BW factor:** Adjusts the tracking speed vs. stability.
-* **Advisor:** Automatically calculates optimal PID gains based on the sweep data and set these values to the PID. The banswidth value is critical here.
-* **PLL Lock:** Indicators turn red when the system is not successfully "locked" to the resonance. A PLL lock button will be ON in the bottom part of the window.
+* **BW factor:** Adjusts the tracking speed vs. stability; (around 0.8 to 1 seems a good value)
+* **Advisor:** Automatically calculates optimal PID gains based on the sweep data and set these values to the PID. The bandwidth value is critical here; there is a compromise to be made between accuracy and stability.
+* **PLL Lock:** Indicators turn red when the system is not successfully "locked" to the resonance. A PLL lock LED indicator will also be ON in the bottom right part of the window.
 * **Live Graph:** Monitors Frequency, Amplitude ($R$), and Phase over time.
-* Note on "Record": the data is saved continuously to a TMDS file and a CSV text file. If you select a large number of Samples/sec, those files will be very large.
+* Note on "Record": If "Record" is ON the data is saved continuously to a TMDS file and a CSV text file. If you select a large number of Samples/sec, those files will be very large.
 
 ---
 
@@ -51,14 +52,15 @@ Dedicated to active dissipation control or monitoring change in the damping of t
 * **Knee Detector:** Parameter for identifying the transition in the decay or response curve.
 * **Gamma vs Kp:** Plots the relationship between the feedback gain and the damping coefficient.
 
+*At this moment this part is not fully functional*
 ---
 
 ## 5. Scope
 Configures high-speed data capture for transient events.
-For this configuration you will need to load the PLL_Scope file.
+For this configuration you will need to load the PLL_Scope file or configure the LabOne app.
 ![Configuration](images/scope_1.png)
 
-This is a Gated measurement, the data is transferred only when the Trigger3 is in High state. The scope is triggered by Trigger one, in the DIO module you should have something like this, and a connection between Trigger 3 and Trigger 1 should be made (I know, there are simpler ways... )
+This is a Gated measurement, the data is transferred only when the Trigger3 is in High state. The scope is triggered by Trigger 1, in the DIO module you should have something like this, and a connection between Trigger 3 and Trigger 1 should be made (I know, there are simpler ways... )
 ![DIO state](images/scope_4.png)
 
 * **Points:** Defines the number of points to acquire; the smallest number is 4096.
