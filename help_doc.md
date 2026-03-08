@@ -52,7 +52,7 @@ Dedicated to active dissipation control or monitoring change in the damping of t
 * **Knee Detector:** Parameter for identifying the transition in the decay or response curve.
 * **Gamma vs Kp:** Plots the relationship between the feedback gain and the damping coefficient.
 
-*At this moment this part is not fully functional*
+_At this moment this part is not fully functional._
 ---
 
 ## 5. Scope
