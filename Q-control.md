@@ -37,7 +37,7 @@ Before engaging any control loops, we must find the resonance state of the QCM. 
 We need to calibrate the relationship between the Q-Control P-gain ($K_p$) and the physical damping ($\Gamma$). By stepping down the drive amplitude to half (or 33%), the resonator undergoes a transient decay to a new steady state. Because the signal never drops into the noise floor, the PLL should remain locked throughout the measurement, if it is enabled.
 
 In my case the demodulators look like this:
-![Lock in state](lock-in-q.png)
+![Lock in state](images/lock-in-q.png)
 
 1. Ensure PID 3 P-gain starts at 0.
 2. Define a safe $K_p$ scan array (e.g., -10.0 to to 10.0, increase it in subsecvent trials) for the PID3. Put lower limit and upper limit to about -0.25V and 0.25V.

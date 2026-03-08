@@ -1,5 +1,5 @@
 # QCM_PLL Measurement Software Documentation
-version 3, 27 feb 2026
+version 8 march feb 2026
 
 This software is designed to interface with a Zurich Instruments UHF-LI (or similar) to perform high-precision QCM measurements, frequency tracking, and dissipation (Q-factor) control.
 
@@ -13,6 +13,8 @@ The entry point of the application for hardware communication and configuration 
 * **Load/Save cfg:** Allows importing or exporting instrument settings via `.xml` files. The files saved from the LabOne interface can be used here.
 * **Continue (Arrow):** Advances the workflow to the Sweep tab. This option is not active until a valid conection is established with the instrument.
 
+Be sure to load the correct configuration file for the experiment, or adapt in the LabOne UI the parameters that are good for the type of measurement.
+
 ---
 
 ## 2. Sweep Tab
@@ -25,7 +27,7 @@ Used to characterize the resonator's resonance frequency ($f_0$) and Quality Fac
     * **freq_0 ($f_0$):** Center resonance frequency.
     * **BW:** Bandwidth at half-maximum.
     * **Q:** The Quality factor ($f_0 / BW$).
-
+### Configuration file: PLL or PLL_Scope
 ---
 
 ## 3. Track f (Frequency Tracking)
@@ -51,14 +53,22 @@ Dedicated to active dissipation control or monitoring change in the damping of t
 
 ---
 
-## 5. DAQ (Data Acquisition)
+## 5. Scope
 Configures high-speed data capture for transient events.
+For this configuration you will need to load the PLL_Scope file.
+![Configuration](images/scope_1.png)
 
-* **Acquire / DAQ Points:** Defines the number of points per trigger.
-* **Trigger:** Set the source (e.g., Trigger 3) at which data recording starts.
+This is a Gated measurement, the data is transferred only when the Trigger3 is in High state. The scope is triggered by Trigger one, in the DIO module you should have something like this, and a connection between Trigger 3 and Trigger 1 should be made (I know, there are simpler ways... )
+![DIO state](images/scope_4.png)
+
+* **Points:** Defines the number of points to acquire; the smallest number is 4096.
+* **Trigger:** Set the source (e.g., Trigger 1) at which data recording starts.
+![Channels](images/scope_2.png)
+![Trigger](images/scope_3.png)
+ 
 * **TC /usec:** The time constant for the digital filter for the Demods 2.
 
-  The duration of the measurement is automatically established based on the number of points and the demodulator transfer rate.
+The duration of the measurement is automatically established based on the number of points and the rate of transfer. In this configuration transfers up to 1.8G Sa/sec are possible. Be conservative, there is a memory limit in the DIG-Scope module and saving millions of points is useless.
 
 ---
 
