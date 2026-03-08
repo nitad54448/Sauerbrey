@@ -8,7 +8,7 @@ Based on notes from R. Stomp see the [blog article](https://www.zhinst.com/europ
 
 ---
 ## Q-Control diagram for this guide
-![Connections](q-control-flow.png)
+![Connections](images/q-control-flow.png)
 
 ## Part 1: The workflow
 
