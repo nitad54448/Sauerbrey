@@ -73,6 +73,7 @@ This is a Gated measurement, the data is transferred only when the Trigger3 is i
 * **TC /usec:** The time constant for the digital filter for the Demods 2.
 
 The duration of the measurement is automatically established based on the number of points and the rate of transfer. In this configuration transfers up to 1.8G Sa/sec are possible. Be conservative, there is a memory limit in the DIG-Scope module and saving millions of points is useless.
+The ranges for the two channels should be set by user. There is a autorange option for this but user selected values is faster.
 
 ---
 
