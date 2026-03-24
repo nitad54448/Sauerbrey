@@ -231,6 +231,7 @@ TC(Demod 2) << TC(Demod 3) << TC(Demod 1) << TC(Demod 4)
 
 Fast-to-Slow ordering prevents loop interaction and instability. 
 
+---
 
 ### Measurement notes
 
@@ -304,15 +305,3 @@ Fast → Slow ordering prevents loop interaction and instability.
 
 ---
 
-### Important measurement note
-
-While Q-control is engaged, the measured damping is:
-
-$\Gamma_{effective} = \Gamma_{native} - \alpha \cdot K_p$
-
-Thus, during HIPIMS operation:
-- Frequency shifts are physically meaningful.
-- Measured Q reflects the actively controlled system.
-- Native damping requires disabling PID 3 and performing a partial ring-down transient.
-
----
