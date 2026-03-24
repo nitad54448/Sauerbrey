@@ -1,0 +1,22 @@
+site_name: QCM Analyst Documentation
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: blue
+  features:
+    - navigation.tabs
+    - content.code.copy
+
+nav:
+  - Welcome: index.md
+  - User Guide: guide.md
+  - Physics & Math: physics.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS-MML_HTMLorMML

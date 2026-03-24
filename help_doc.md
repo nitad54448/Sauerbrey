@@ -63,7 +63,7 @@ For this configuration you will need to load the PLL_Scope file or configure the
 This is a Gated measurement, the data is transferred only when the Trigger3 is in High state. The scope is triggered by Trigger 1, in the DIO module you should have something like this, and a connection between Trigger 3 and Trigger 1 should be made (I know, there are simpler ways... )
 ![DIO state](images/scope_4.png)
 
-* **Points:** Defines the number of points to acquire; the smallest number is 4096.
+* **Points:** Defines the number of points to acquire; the total measurement duration and the amount of data is related to this and the acquisition rate.
 * **Trigger:** Set the source (e.g., Trigger 1) at which data recording starts.
 
 ![Channels](images/scope_2.png)
