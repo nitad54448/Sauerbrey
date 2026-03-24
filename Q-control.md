@@ -231,18 +231,6 @@ TC(Demod 2) << TC(Demod 3) << TC(Demod 1) << TC(Demod 4)
 
 Fast-to-Slow ordering prevents loop interaction and instability. 
 
-### Important Measurement Note
-
-While Q-control is engaged, the measured damping is:
-
-Gamma_effective = Gamma_native + (alpha * Kp)
-
-Thus, during HIPIMS operation:
-* Frequency shifts are physically meaningful and reflect real mass/stress changes.
-* Measured Q reflects the actively controlled system, not the native plasma damping.
-* To measure native plasma-induced damping, you must disable PID 3 and observe the passive ring-down.
-
----
 
 ### Measurement notes
 
