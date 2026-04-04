@@ -139,8 +139,7 @@
   z-index: 1000;
   pointer-events: none;
   display: none;
-  max-width: 250px;
-}
+ }
 .pv-title { color: var(--accent); margin-bottom: 6px; font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
 .pv-val { color: var(--muted); }
 
@@ -486,32 +485,42 @@ function buildTree(groups) {
       item.innerHTML=`<span class="c-dot"></span>${esc(cName)}<span class="dtype">${dt}</span>`;
       item.addEventListener('click', ()=>selectChannel(ch.path, gName, cName, ch.obj));
 
+item.addEventListener('mouseenter', (e) => {
+//rajout des variable de nr de points, Xpixels, Ypixels
+  const POINTS = 800;
+  const PIXELS_X = 260;
+  const PIXELS_Y = 120;
+  // 
 
-      item.addEventListener('mouseenter', (e) => {
   const pv = document.getElementById('channelPreview');
+  //pv.style.maxWidth = 'none';
+  //annule la taille, si définie dans le CSS... 
   const numVals = (ch.obj.values || []).filter(v => typeof v === 'number');
 
   if (numVals.length === 0) {
     pv.innerHTML = `<div class="pv-title">${esc(cName)}</div><div class="pv-val">No numeric data</div>`;
   } else {
-    pv.innerHTML = `<div class="pv-title">${esc(cName)}</div><canvas id="pvCanvas" width="200" height="60" style="margin-top:4px;"></canvas>`;
+    pv.innerHTML = `<div class="pv-title">${esc(cName)}</div><canvas id="pvCanvas" width="${PIXELS_X}" height="${PIXELS_Y}" style="margin-top:4px;"></canvas>`;
     const ctx = document.getElementById('pvCanvas').getContext('2d');
     
-    // Decimate data for performance (max 400 points for a mini plot)
-    const step = Math.max(1, Math.floor(numVals.length / 400));
+    // Decimate 
+    const step = Math.max(1, Math.floor(numVals.length / POINTS));
     const plotData = numVals.filter((_, i) => i % step === 0);
     
     const min = Math.min(...plotData);
     const max = Math.max(...plotData);
     const range = (max - min) || 1;
+    
+    // 2px padding 
+    const padding = 2;
+    const plotHeight = PIXELS_Y - (padding * 2);
 
     ctx.strokeStyle = '#00e5a0';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     plotData.forEach((val, i) => {
-      const x = (i / (plotData.length - 1 || 1)) * 200;
-      // Scale Y to fit the 60px height, with 2px padding top/bottom
-      const y = 60 - ((val - min) / range) * 56 - 2; 
+      const x = (i / (plotData.length - 1 || 1)) * PIXELS_X;
+      const y = PIXELS_Y - ((val - min) / range) * plotHeight - padding; 
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -522,7 +531,6 @@ function buildTree(groups) {
   pv.style.left = (e.clientX + 15) + 'px';
   pv.style.top = (e.clientY + 15) + 'px';
 });
-
 
 item.addEventListener('mousemove', (e) => {
   const pv = document.getElementById('channelPreview');
