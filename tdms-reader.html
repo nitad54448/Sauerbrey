@@ -113,6 +113,18 @@
   .stat-card .value { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: var(--accent); font-weight: 700; }
   .stat-card .value.blue { color: var(--accent2); }
   .stat-card .value.white { color: var(--text); font-size: 13px; }
+
+  footer {
+  text-align: center;
+  padding: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+
 </style>
 </head>
 <body>
@@ -537,8 +549,7 @@ function selectChannel(path, gName, cName, obj) {
 }
 
 async function exportCSV() {
-  // Collect all channels across all groups, in order
-  const columns = []; // { header, values }
+  const columns = [];
   for (const [gName, g] of Object.entries(parsedGroups)) {
     for (const [cName, ch] of Object.entries(g.channels)) {
       if (ch.obj.values.length > 0) {
@@ -549,52 +560,66 @@ async function exportCSV() {
   if (columns.length === 0) { alert('No channel data to export.'); return; }
 
   const numRows = Math.max(...columns.map(c => c.values.length));
-
-  // Build CSV string
-  const lines = [];
-  // Header row
-  lines.push(columns.map(c => csvCell(c.header)).join(','));
-  // Data rows
-  for (let i = 0; i < numRows; i++) {
-    lines.push(columns.map(c => i < c.values.length ? csvCell(c.values[i]) : '').join(','));
-  }
-
-  const csvContent = lines.join('\r\n');
   const defaultName = (document.getElementById('statusText').textContent || 'export').replace(/\.tdms$/i,'') + '.csv';
 
-  // Use modern File System Access API if available (lets user pick name + location)
-  if (window.showSaveFilePicker) {
-    try {
+  let writable = null;
+  const blobParts = []; // Used as fallback if File System Access API is unavailable
+
+  try {
+    if (window.showSaveFilePicker) {
       const handle = await window.showSaveFilePicker({
         suggestedName: defaultName,
         types: [{ description: 'CSV file', accept: { 'text/csv': ['.csv'] } }],
       });
-      const writable = await handle.createWritable();
-      await writable.write(csvContent);
-      await writable.close();
-      return;
-    } catch(e) {
-      if (e.name === 'AbortError') return; // user cancelled
-      // fall through to legacy method
+      writable = await handle.createWritable();
     }
+  } catch (e) {
+    if (e.name === 'AbortError') return; // user cancelled
   }
 
-  // Fallback: trigger download (no location picker, but default name is set)
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = defaultName; a.click();
-  URL.revokeObjectURL(url);
+  // Helper to stream data or push to memory array
+  const writeData = async (data) => {
+    if (writable) await writable.write(data);
+    else blobParts.push(data);
+  };
+
+  // Write header
+  await writeData(columns.map(c => csvCell(c.header)).join(',') + '\r\n');
+
+  // Process and write rows in chunks to prevent memory crashes
+  const CHUNK_SIZE = 10000;
+  for (let i = 0; i < numRows; i += CHUNK_SIZE) {
+    const chunk = [];
+    const end = Math.min(i + CHUNK_SIZE, numRows);
+    
+    for (let j = i; j < end; j++) {
+      chunk.push(columns.map(c => j < c.values.length ? csvCell(c.values[j]) : '').join(','));
+    }
+    
+    await writeData(chunk.join('\r\n') + '\r\n');
+  }
+
+  // Finalize
+  if (writable) {
+    await writable.close();
+  } else {
+    const blob = new Blob(blobParts, { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = defaultName; a.click();
+    URL.revokeObjectURL(url);
+  }
 }
 
 function csvCell(v) {
+  if (v == null) return ''; // quoi faire avec 'null' .. à voir
   const s = String(v);
-  // Quote if contains comma, quote, or newline
   if (s.includes(',') || s.includes('"') || s.includes('\n')) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
 }
+
 
 function resetUI() {
   document.getElementById('dropzone').style.display='';
@@ -658,5 +683,10 @@ document.querySelectorAll('.tab').forEach(tab=>{
   });
 });
 </script>
+
+<footer>
+  NitaD, Univ Paris-Saclay, Version 1.0.1 &middot; 04 April 2026
+</footer>
+
 </body>
 </html>
