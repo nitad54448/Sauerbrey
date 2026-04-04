@@ -125,6 +125,26 @@
 }
 
 
+
+#channelPreview {
+  position: fixed;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text);
+  z-index: 1000;
+  pointer-events: none;
+  display: none;
+  max-width: 250px;
+}
+.pv-title { color: var(--accent); margin-bottom: 6px; font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.pv-val { color: var(--muted); }
+
+
 </style>
 </head>
 <body>
@@ -465,6 +485,55 @@ function buildTree(groups) {
       item.className='channel-item'; item.dataset.path=ch.path;
       item.innerHTML=`<span class="c-dot"></span>${esc(cName)}<span class="dtype">${dt}</span>`;
       item.addEventListener('click', ()=>selectChannel(ch.path, gName, cName, ch.obj));
+
+
+      item.addEventListener('mouseenter', (e) => {
+  const pv = document.getElementById('channelPreview');
+  const numVals = (ch.obj.values || []).filter(v => typeof v === 'number');
+
+  if (numVals.length === 0) {
+    pv.innerHTML = `<div class="pv-title">${esc(cName)}</div><div class="pv-val">No numeric data</div>`;
+  } else {
+    pv.innerHTML = `<div class="pv-title">${esc(cName)}</div><canvas id="pvCanvas" width="200" height="60" style="margin-top:4px;"></canvas>`;
+    const ctx = document.getElementById('pvCanvas').getContext('2d');
+    
+    // Decimate data for performance (max 400 points for a mini plot)
+    const step = Math.max(1, Math.floor(numVals.length / 400));
+    const plotData = numVals.filter((_, i) => i % step === 0);
+    
+    const min = Math.min(...plotData);
+    const max = Math.max(...plotData);
+    const range = (max - min) || 1;
+
+    ctx.strokeStyle = '#00e5a0';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    plotData.forEach((val, i) => {
+      const x = (i / (plotData.length - 1 || 1)) * 200;
+      // Scale Y to fit the 60px height, with 2px padding top/bottom
+      const y = 60 - ((val - min) / range) * 56 - 2; 
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+  
+  pv.style.display = 'block';
+  pv.style.left = (e.clientX + 15) + 'px';
+  pv.style.top = (e.clientY + 15) + 'px';
+});
+
+
+item.addEventListener('mousemove', (e) => {
+  const pv = document.getElementById('channelPreview');
+  pv.style.left = (e.clientX + 15) + 'px';
+  pv.style.top = (e.clientY + 15) + 'px';
+});
+item.addEventListener('mouseleave', () => {
+  document.getElementById('channelPreview').style.display = 'none';
+});
+
+
       chList.appendChild(item);
     }
     node.appendChild(label); node.appendChild(chList); container.appendChild(node);
@@ -682,11 +751,15 @@ document.querySelectorAll('.tab').forEach(tab=>{
     document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
   });
 });
+
+// version 1.0.2 : rajout d'un petit graphe preview
 </script>
 
 <footer>
-  NitaD, Univ Paris-Saclay, Version 1.0.1 &middot; 04 April 2026
+  NitaD, Univ Paris-Saclay, Version 1.0.2 &middot; 04 April 2026
 </footer>
+
+<div id="channelPreview"></div>
 
 </body>
 </html>
