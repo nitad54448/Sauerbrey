@@ -487,7 +487,19 @@ function buildTree(groups) {
 label.innerHTML = `<span class="arrow">▶</span><input type="checkbox" class="group-export-cb" value="${esc(gName)}" onclick="event.stopPropagation()" style="margin-right: 6px; cursor: pointer;"><span class="g-icon">▤</span>${esc(gName)}<span class="ch-count">${cNames.length} ch</span>`;
     
     const chList = document.createElement('div'); chList.className='channels-list';
-    label.addEventListener('click', ()=>{ label.classList.toggle('open'); chList.classList.toggle('open'); });
+  
+label.addEventListener('click', (e)=>{ 
+      // Do nothing if clicking the export checkbox
+      if (e.target.type === 'checkbox') return; 
+
+      label.classList.toggle('open'); 
+      chList.classList.toggle('open'); 
+      
+      // Push the group object to the property viewer
+      const gObj = g.groupObj || { properties: {}, values: [] };
+      selectChannel(`/'${gName}'`, gName, '— (Group Properties) —', gObj);
+    });
+
 
     for (const cName of cNames) {
       const ch  = g.channels[cName];
