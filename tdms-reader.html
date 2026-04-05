@@ -27,8 +27,10 @@
   header .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
   header .logo span { color: var(--accent); }
   header .badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; background: #00e5a015; border: 1px solid #00e5a040; color: var(--accent); padding: 3px 8px; border-radius: 4px; letter-spacing: 1px; }
-  #newFileBtn { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; display: none; transition: all 0.15s; }
-  #newFileBtn:hover { color: var(--text); border-color: var(--accent); }
+  
+  #newFileBtn { font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #00e5a018; border: 1px solid #00e5a050; color: var(--accent); padding: 6px 14px; border-radius: 6px; cursor: pointer; display: none; transition: all 0.15s; }
+  #newFileBtn:hover { background: #00e5a030; }
+
 
   .main { flex: 1; display: flex; flex-direction: column; padding: 28px 32px; gap: 20px; max-width: 1500px; width: 100%; margin: 0 auto; }
 
@@ -50,9 +52,11 @@
 
   #content { display: none; gap: 20px; flex: 1; }
   #content.visible { display: flex; }
-  .panel-row { display: grid; grid-template-columns: 280px 1fr; gap: 20px; flex: 1; min-height: 500px; }
+  
+ .panel-row { display: grid; grid-template-columns: 1fr 1.618fr; gap: 20px; flex: 1; min-height: 500px; max-height: calc(100vh - 220px); }
 
-  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+ .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+
   .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 10px; font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; }
   .panel-header .count { background: var(--surface2); color: var(--accent); padding: 2px 8px; border-radius: 20px; font-size: 10px; }
   .panel-body { flex: 1; overflow-y: auto; padding: 6px; }
@@ -150,9 +154,10 @@
 
 <header>
   <div class="logo">TDMS<span>.</span>reader</div>
-  <div class="badge">PURE JS · NO DEPS</div>
-  <button id="csvBtn" onclick="exportCSV()" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;background:#00e5a018;border:1px solid #00e5a050;color:var(--accent);padding:6px 14px;border-radius:6px;cursor:pointer;display:none;transition:all 0.15s;" onmouseover="this.style.background='#00e5a030'" onmouseout="this.style.background='#00e5a018'">↓ Export CSV</button>
-  <button id="newFileBtn" onclick="resetUI()">↩ Open another file</button>
+   <button id="csvBtn" onclick="exportCSV()" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;background:#00e5a018;border:1px solid #00e5a050;color:var(--accent);padding:6px 14px;border-radius:6px;cursor:pointer;display:none;transition:all 0.15s;" onmouseover="this.style.background='#00e5a030'" onmouseout="this.style.background='#00e5a018'">↓ Export CSV</button>
+
+ <button id="newFileBtn" onclick="document.getElementById('fileInput').click()">↩ Open another file</button>
+
 </header>
 
 <div class="main">
@@ -163,11 +168,15 @@
     <input type="file" id="fileInput" accept=".tdms">
   </div>
 
-  <div id="statusBar">
+<div id="statusBar">
     <div class="dot" id="statusDot"></div>
-    <span id="statusText"></span>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span id="statusText"></span>
+      <span id="statusSubText" style="font-size: 10px; color: var(--muted);"></span>
+    </div>
     <div id="statsArea"></div>
   </div>
+
 
   <div id="content">
     <div class="panel-row">
@@ -444,20 +453,20 @@ function parsePaths(objects) {
   return groups;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  UI
-// ═══════════════════════════════════════════════════════════════════════
 
+//  UI
 let parsedGroups = {};
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function showStatus(msg, state='ok', stats=null) {
+
+function showStatus(msg, subMsg='', state='ok', stats=null) {
   document.getElementById('statusBar').style.display = 'flex';
   document.getElementById('statusDot').className = 'dot '+state;
   document.getElementById('statusText').textContent = msg;
+  document.getElementById('statusSubText').textContent = subMsg;
   const sa = document.getElementById('statsArea');
   sa.innerHTML = stats ? stats.map(s=>`<span style="color:var(--muted)">${s.label}:&nbsp;</span><span>${s.val}</span>`).join('') : '';
 }
@@ -473,7 +482,10 @@ function buildTree(groups) {
     const cNames = Object.keys(g.channels);
     const node  = document.createElement('div'); node.className='group-node';
     const label = document.createElement('div'); label.className='group-label';
-    label.innerHTML = `<span class="arrow">▶</span><span class="g-icon">▤</span>${esc(gName)}<span class="ch-count">${cNames.length} ch</span>`;
+
+
+label.innerHTML = `<span class="arrow">▶</span><input type="checkbox" class="group-export-cb" value="${esc(gName)}" onclick="event.stopPropagation()" style="margin-right: 6px; cursor: pointer;"><span class="g-icon">▤</span>${esc(gName)}<span class="ch-count">${cNames.length} ch</span>`;
+    
     const chList = document.createElement('div'); chList.className='channels-list';
     label.addEventListener('click', ()=>{ label.classList.toggle('open'); chList.classList.toggle('open'); });
 
@@ -625,9 +637,15 @@ function selectChannel(path, gName, cName, obj) {
     </tbody></table>`;
 }
 
+
 async function exportCSV() {
   const columns = [];
+  const checkedBoxes = Array.from(document.querySelectorAll('.group-export-cb:checked')).map(cb => cb.value);
+  const exportAll = checkedBoxes.length === 0;
+
   for (const [gName, g] of Object.entries(parsedGroups)) {
+    if (!exportAll && !checkedBoxes.includes(gName)) continue; 
+    
     for (const [cName, ch] of Object.entries(g.channels)) {
       if (ch.obj.values.length > 0) {
         columns.push({ header: `${gName}/${cName}`, values: ch.obj.values });
@@ -637,10 +655,11 @@ async function exportCSV() {
   if (columns.length === 0) { alert('No channel data to export.'); return; }
 
   const numRows = Math.max(...columns.map(c => c.values.length));
+  // Revert to .csv extension
   const defaultName = (document.getElementById('statusText').textContent || 'export').replace(/\.tdms$/i,'') + '.csv';
 
   let writable = null;
-  const blobParts = []; // Used as fallback if File System Access API is unavailable
+  const blobParts = []; 
 
   try {
     if (window.showSaveFilePicker) {
@@ -651,32 +670,30 @@ async function exportCSV() {
       writable = await handle.createWritable();
     }
   } catch (e) {
-    if (e.name === 'AbortError') return; // user cancelled
+    if (e.name === 'AbortError') return; 
   }
 
-  // Helper to stream data or push to memory array
   const writeData = async (data) => {
     if (writable) await writable.write(data);
     else blobParts.push(data);
   };
 
-  // Write header
-  await writeData(columns.map(c => csvCell(c.header)).join(',') + '\r\n');
+  // Write header using semicolons (;)
+  await writeData(columns.map(c => csvCell(c.header)).join(';') + '\r\n');
 
-  // Process and write rows in chunks to prevent memory crashes
   const CHUNK_SIZE = 10000;
   for (let i = 0; i < numRows; i += CHUNK_SIZE) {
     const chunk = [];
     const end = Math.min(i + CHUNK_SIZE, numRows);
     
     for (let j = i; j < end; j++) {
-      chunk.push(columns.map(c => j < c.values.length ? csvCell(c.values[j]) : '').join(','));
+      // Write rows using semicolons (;)
+      chunk.push(columns.map(c => j < c.values.length ? csvCell(c.values[j]) : '').join(';'));
     }
     
     await writeData(chunk.join('\r\n') + '\r\n');
   }
 
-  // Finalize
   if (writable) {
     await writable.close();
   } else {
@@ -689,13 +706,15 @@ async function exportCSV() {
 }
 
 function csvCell(v) {
-  if (v == null) return ''; // quoi faire avec 'null' .. à voir
+  if (v == null) return ''; 
   const s = String(v);
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+  // Look for semicolons instead of tabs or commas
+  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
 }
+
 
 
 function resetUI() {
@@ -708,26 +727,27 @@ function resetUI() {
   document.getElementById('fileInput').value='';
 }
 
+
 function handleFile(file) {
   if (!file) return;
-  showStatus(`Reading ${file.name}…`, 'loading');
+  showStatus(`Reading ${file.name}…`, '', 'loading');
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const t0 = performance.now();
       const objects = parseTDMS(e.target.result);
-      const t1 = performance.now();
 
       parsedGroups = parsePaths(objects);
       const gCount = Object.keys(parsedGroups).length;
       const cCount = Object.values(parsedGroups).reduce((s,g)=>s+Object.keys(g.channels).length,0);
       const samples= Object.values(objects).reduce((s,o)=>s+(o.values?.length||0),0);
 
-      showStatus(file.name, 'ok', [
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      const fileDate = new Date(file.lastModified).toLocaleString();
+
+      showStatus(file.name, `${sizeMB} MB · ${fileDate}`, 'ok', [
         {label:'Groups',   val:gCount},
         {label:'Channels', val:cCount},
-        {label:'Samples',  val:samples.toLocaleString()},
-        {label:'Time',     val:`${(t1-t0).toFixed(1)}ms`},
+        {label:'Samples',  val:samples.toLocaleString()}
       ]);
 
       buildTree(parsedGroups);
@@ -737,12 +757,13 @@ function handleFile(file) {
       document.getElementById('csvBtn').style.display='block';
 
     } catch(err) {
-      showStatus('Parse error: '+err.message, 'error');
+      showStatus('Parse error: '+err.message, '', 'error');
       console.error(err);
     }
   };
   reader.readAsArrayBuffer(file);
 }
+
 
 const dz = document.getElementById('dropzone');
 dz.addEventListener('click',  ()=>document.getElementById('fileInput').click());
@@ -764,7 +785,7 @@ document.querySelectorAll('.tab').forEach(tab=>{
 </script>
 
 <footer>
-  NitaD, Univ Paris-Saclay, Version 1.0.2 &middot; 04 April 2026
+  NitaD, Univ Paris-Saclay, Version 1.0.3 &middot; 05 April 2026
 </footer>
 
 <div id="channelPreview"></div>
