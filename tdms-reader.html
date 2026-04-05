@@ -637,7 +637,7 @@ function selectChannel(path, gName, cName, obj) {
     </tbody></table>`;
 }
 
-
+//séparateur ; ou , suivant le système 
 async function exportCSV() {
   const columns = [];
   const checkedBoxes = Array.from(document.querySelectorAll('.group-export-cb:checked')).map(cb => cb.value);
@@ -654,8 +654,11 @@ async function exportCSV() {
   }
   if (columns.length === 0) { alert('No channel data to export.'); return; }
 
+  // Auto-detect the best separator based on the OS, direct read in Excel... (well, there is a TDMS plugin for reading in Excel, so not really needed) 
+  const useSemicolon = (1.1).toLocaleString().includes(',');
+  const SEP = useSemicolon ? ';' : ',';
+
   const numRows = Math.max(...columns.map(c => c.values.length));
-  // Revert to .csv extension
   const defaultName = (document.getElementById('statusText').textContent || 'export').replace(/\.tdms$/i,'') + '.csv';
 
   let writable = null;
@@ -678,8 +681,8 @@ async function exportCSV() {
     else blobParts.push(data);
   };
 
-  // Write header using semicolons (;)
-  await writeData(columns.map(c => csvCell(c.header)).join(';') + '\r\n');
+  // Write header 
+  await writeData(columns.map(c => csvCell(c.header, SEP)).join(SEP) + '\r\n');
 
   const CHUNK_SIZE = 10000;
   for (let i = 0; i < numRows; i += CHUNK_SIZE) {
@@ -687,8 +690,8 @@ async function exportCSV() {
     const end = Math.min(i + CHUNK_SIZE, numRows);
     
     for (let j = i; j < end; j++) {
-      // Write rows using semicolons (;)
-      chunk.push(columns.map(c => j < c.values.length ? csvCell(c.values[j]) : '').join(';'));
+      // Write rows using dynamic separator
+      chunk.push(columns.map(c => j < c.values.length ? csvCell(c.values[j], SEP) : '').join(SEP));
     }
     
     await writeData(chunk.join('\r\n') + '\r\n');
@@ -705,16 +708,15 @@ async function exportCSV() {
   }
 }
 
-function csvCell(v) {
+function csvCell(v, sep) {
   if (v == null) return ''; 
   const s = String(v);
-  // Look for semicolons instead of tabs or commas
-  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+  // Look for the dynamic separator to wrap in quotes if needed
+  if (s.includes(sep) || s.includes('"') || s.includes('\n')) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
 }
-
 
 
 function resetUI() {
