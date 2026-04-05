@@ -474,7 +474,13 @@ function showStatus(msg, subMsg='', state='ok', stats=null) {
 function buildTree(groups) {
   const container = document.getElementById('treeContainer');
   container.innerHTML = '';
-  const gNames = Object.keys(groups);
+  
+ const gNames = Object.keys(groups).sort((a, b) => {
+    if (a === '(root)') return -1;
+    if (b === '(root)') return 1;
+    return a.localeCompare(b);
+  });
+
   document.getElementById('groupCount').textContent = gNames.length+' group'+(gNames.length!==1?'s':'');
 
   for (const gName of gNames) {
