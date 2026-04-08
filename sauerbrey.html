@@ -913,11 +913,17 @@ function updateGraphs() {
         document.getElementById('iffOut').innerText = (iff*100).toFixed(1) + " %";
     }
 
-    /* --- UTILS --- */
+    /* ---valuers preset --- */
     function applyPreset() {
         const m = PRESETS[document.getElementById('pMat').value];
-        if(m) { document.getElementById('pRho').value = m.r; document.getElementById('pZ').value = m.z; recalc(); }
+        if(m) { 
+            document.getElementById('pRho').value = m.rho; 
+            document.getElementById('pZ').value = m.z; 
+            recalc(); 
+        }
     }
+
+
     function setupResizer() {
         const g = document.getElementById('resizer');
         let d = false;
