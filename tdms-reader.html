@@ -5,159 +5,197 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TDMS Reader</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface2: #f0f1f4;
+    --border: #dde0e8;
+    --border2: #e8eaef;
+    --accent: #2563eb;
+    --accent2: #0891b2;
+    --accent-light: #eff6ff;
+    --accent2-light: #ecfeff;
+    --text: #1a1d27;
+    --muted: #7c82a0;
+    --error: #dc2626;
+    --success: #059669;
+    --num-color: #2563eb;
+    --str-color: #b45309;
+  }
+
+  html.dark {
     --bg: #0b0c0f;
     --surface: #13151a;
     --surface2: #1c1f27;
     --border: #2a2d38;
-    --accent: #00e5a0;
-    --accent2: #0077ff;
-    --text: #e8eaf0;
+    --border2: #1e2130;
+    --accent: #60a5fa;
+    --accent2: #22d3ee;
+    --accent-light: #1e3a5f20;
+    --accent2-light: #164e6320;
+    --text: #e8eaef;
     --muted: #5a5f72;
-    --error: #ff4d6a;
+    --error: #f87171;
+    --success: #34d399;
+    --num-color: #60a5fa;
+    --str-color: #fcd34d;
   }
 
-  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  #themeToggle {
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  #themeToggle:hover { background: var(--surface2); color: var(--text); border-color: var(--muted); }
 
-  header { padding: 20px 32px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; background: var(--surface); }
-  header .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+
+  header { padding: 14px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  header .logo { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; color: var(--text); font-family: 'IBM Plex Mono', monospace; }
   header .logo span { color: var(--accent); }
-  header .badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; background: #00e5a015; border: 1px solid #00e5a040; color: var(--accent); padding: 3px 8px; border-radius: 4px; letter-spacing: 1px; }
-  
-  #newFileBtn { font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #00e5a018; border: 1px solid #00e5a050; color: var(--accent); padding: 6px 14px; border-radius: 6px; cursor: pointer; display: none; transition: all 0.15s; }
-  #newFileBtn:hover { background: #00e5a030; }
+  header .badge { font-family: 'IBM Plex Mono', monospace; font-size: 10px; background: var(--accent-light); border: 1px solid #bfdbfe; color: var(--accent); padding: 2px 8px; border-radius: 4px; letter-spacing: 0.5px; }
 
+  #newFileBtn { font-family: 'IBM Plex Mono', monospace; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; display: none; transition: all 0.15s; }
+  #newFileBtn:hover { background: var(--border2); color: var(--text); border-color: #c5c9d8; }
 
-  .main { flex: 1; display: flex; flex-direction: column; padding: 28px 32px; gap: 20px; max-width: 1500px; width: 100%; margin: 0 auto; }
+  .main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px; gap: 16px; max-width: 1500px; width: 100%; margin: 0 auto; }
 
-  #dropzone { border: 2px dashed var(--border); border-radius: 16px; padding: 60px 32px; text-align: center; cursor: pointer; transition: all 0.25s ease; background: var(--surface); position: relative; overflow: hidden; }
-  #dropzone::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, #00e5a008 0%, transparent 70%); pointer-events: none; }
-  #dropzone:hover, #dropzone.drag-over { border-color: var(--accent); background: #00e5a008; }
-  #dropzone .icon { font-size: 44px; margin-bottom: 14px; display: block; }
-  #dropzone h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-  #dropzone p { color: var(--muted); font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+  #dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 56px 32px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: var(--surface); }
+  #dropzone:hover, #dropzone.drag-over { border-color: var(--accent); background: var(--accent-light); }
+  #dropzone .icon { font-size: 40px; margin-bottom: 14px; display: block; }
+  #dropzone h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+  #dropzone p { color: var(--muted); font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
   #fileInput { display: none; }
 
-  #statusBar { display: none; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 8px var(--accent); }
-  .dot.error { background: var(--error); box-shadow: 0 0 8px var(--error); }
-  .dot.loading { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  #statusBar { display: none; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+  .dot.error { background: var(--error); }
+  .dot.loading { background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
   #statsArea { margin-left: auto; color: var(--muted); display: flex; gap: 20px; }
-  #statsArea span { color: var(--text); }
+  #statsArea span { color: var(--text); font-weight: 500; }
 
-  #content { display: none; gap: 20px; flex: 1; }
+  #content { display: none; gap: 16px; flex: 1; }
   #content.visible { display: flex; }
-  
- .panel-row { display: grid; grid-template-columns: 1fr 1.618fr; gap: 20px; flex: 1; min-height: 500px; max-height: calc(100vh - 220px); }
 
- .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .panel-row { display: grid; grid-template-columns: 1fr 1.618fr; gap: 16px; flex: 1; min-height: 500px; max-height: calc(100vh - 200px); }
 
-  .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 10px; font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; }
-  .panel-header .count { background: var(--surface2); color: var(--accent); padding: 2px 8px; border-radius: 20px; font-size: 10px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+
+  .panel-header { padding: 10px 14px; border-bottom: 1px solid var(--border2); font-size: 10px; font-family: 'IBM Plex Mono', monospace; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; background: var(--surface2); }
+  .panel-header .count { background: var(--surface); color: var(--accent); padding: 2px 8px; border-radius: 20px; font-size: 10px; border: 1px solid var(--border); }
   .panel-body { flex: 1; overflow-y: auto; padding: 6px; }
-  .panel-body::-webkit-scrollbar { width: 5px; }
-  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-  .group-node { margin-bottom: 2px; }
-  .group-label { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text); transition: background 0.15s; user-select: none; }
+  .group-node { margin-bottom: 1px; }
+  .group-label { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text); transition: background 0.12s; user-select: none; }
   .group-label:hover { background: var(--surface2); }
-  .group-label .arrow { color: var(--muted); font-size: 10px; transition: transform 0.2s; flex-shrink: 0; }
+  .group-label .arrow { color: var(--muted); font-size: 9px; transition: transform 0.18s; flex-shrink: 0; }
   .group-label.open .arrow { transform: rotate(90deg); }
   .group-label .g-icon { color: var(--accent2); flex-shrink: 0; }
-  .group-label .ch-count { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); flex-shrink: 0; }
+  .group-label .ch-count { margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); flex-shrink: 0; }
   .channels-list { padding-left: 14px; display: none; }
   .channels-list.open { display: block; }
-  .channel-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); transition: all 0.15s; border: 1px solid transparent; margin-bottom: 1px; }
+  .channel-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); transition: all 0.12s; border: 1px solid transparent; margin-bottom: 1px; }
   .channel-item:hover { background: var(--surface2); color: var(--text); }
-  .channel-item.active { background: #00e5a012; border-color: #00e5a030; color: var(--accent); }
-  .channel-item .c-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .channel-item.active { background: var(--accent-light); border-color: #bfdbfe; color: var(--accent); }
+  .channel-item .c-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
   .channel-item.active .c-dot { background: var(--accent); }
-  .channel-item .dtype { margin-left: auto; font-size: 9px; color: var(--muted); background: var(--surface2); padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+  .channel-item .dtype { margin-left: auto; font-size: 9px; color: var(--muted); background: var(--surface2); padding: 1px 5px; border-radius: 3px; flex-shrink: 0; border: 1px solid var(--border2); }
 
   .data-panel { flex: 1; display: flex; flex-direction: column; }
-  .tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
-  .tab { padding: 7px 14px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); cursor: pointer; border-radius: 6px 6px 0 0; border: 1px solid transparent; border-bottom: none; transition: all 0.15s; user-select: none; }
-  .tab:hover { color: var(--text); }
-  .tab.active { background: var(--surface2); border-color: var(--border); color: var(--accent); }
+  .tabs { display: flex; gap: 1px; padding: 8px 8px 0; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .tab { padding: 6px 14px; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); cursor: pointer; border-radius: 5px 5px 0 0; border: 1px solid transparent; border-bottom: none; transition: all 0.12s; user-select: none; }
+  .tab:hover { color: var(--text); background: var(--border2); }
+  .tab.active { background: var(--surface); border-color: var(--border); color: var(--accent); font-weight: 500; }
   .tab-content { display: none; flex: 1; overflow: auto; padding: 14px; }
   .tab-content.active { display: block; }
-  .tab-content::-webkit-scrollbar { width: 5px; }
-  .tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .tab-content::-webkit-scrollbar { width: 4px; }
+  .tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-  .props-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
-  .props-table th { text-align: left; padding: 7px 12px; color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
-  .props-table td { padding: 7px 12px; border-bottom: 1px solid #1a1d24; vertical-align: top; }
+  .props-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
+  .props-table th { text-align: left; padding: 6px 12px; color: var(--muted); font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .props-table td { padding: 6px 12px; border-bottom: 1px solid var(--border2); vertical-align: top; }
   .props-table tr:hover td { background: var(--surface2); }
   .props-table .key { color: var(--accent2); }
   .props-table .val { color: var(--text); word-break: break-all; }
   .props-table .tcell { color: var(--muted); font-size: 10px; }
 
   .values-wrap { overflow: auto; }
-  .values-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
-  .values-table th { position: sticky; top: 0; background: var(--surface); padding: 7px 12px; color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); z-index: 1; }
+  .values-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
+  .values-table th { position: sticky; top: 0; background: var(--surface2); padding: 6px 12px; color: var(--muted); font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; border-bottom: 1px solid var(--border); z-index: 1; }
   .values-table th:first-child { text-align: left; width: 70px; }
-  .values-table td { padding: 5px 12px; border-bottom: 1px solid #1a1d24; }
+  .values-table td { padding: 5px 12px; border-bottom: 1px solid var(--border2); }
   .values-table td:first-child { color: var(--muted); }
   .values-table tr:hover td { background: var(--surface2); }
-  .num { color: var(--accent); }
-  .str { color: #f0c040; }
+  .num { color: var(--num-color); }
+  .str { color: var(--str-color); }
 
-  .truncate-note { text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 10px; border-top: 1px solid var(--border); margin-top: 8px; }
-  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 13px; gap: 10px; }
-  .empty-state .big { font-size: 30px; }
+  .truncate-note { text-align: center; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 10px; border-top: 1px solid var(--border2); margin-top: 8px; }
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 13px; gap: 10px; }
+  .empty-state .big { font-size: 28px; }
 
   .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
   .stat-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
-  .stat-card .label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
-  .stat-card .value { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: var(--accent); font-weight: 700; }
+  .stat-card .label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-card .value { font-family: 'IBM Plex Mono', monospace; font-size: 15px; color: var(--accent); font-weight: 600; }
   .stat-card .value.blue { color: var(--accent2); }
   .stat-card .value.white { color: var(--text); font-size: 13px; }
 
   footer {
-  text-align: center;
-  padding: 16px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--muted);
-  border-top: 1px solid var(--border);
-  margin-top: auto;
-}
+    text-align: center;
+    padding: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+    background: var(--surface);
+  }
 
-
-
-#channelPreview {
-  position: fixed;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  padding: 10px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--text);
-  z-index: 1000;
-  pointer-events: none;
-  display: none;
- }
-.pv-title { color: var(--accent); margin-bottom: 6px; font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-.pv-val { color: var(--muted); }
-
-
+  #channelPreview {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    z-index: 1000;
+    pointer-events: none;
+    display: none;
+  }
+  .pv-title { color: var(--accent); margin-bottom: 6px; font-weight: 600; border-bottom: 1px solid var(--border2); padding-bottom: 4px; }
+  .pv-val { color: var(--muted); }
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">TDMS<span>.</span>reader</div>
-   <button id="csvBtn" onclick="exportCSV()" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;background:#00e5a018;border:1px solid #00e5a050;color:var(--accent);padding:6px 14px;border-radius:6px;cursor:pointer;display:none;transition:all 0.15s;" onmouseover="this.style.background='#00e5a030'" onmouseout="this.style.background='#00e5a018'">↓ Export CSV</button>
+   <button id="csvBtn" onclick="exportCSV()" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--accent-light);border:1px solid #bfdbfe;color:var(--accent);padding:6px 14px;border-radius:6px;cursor:pointer;display:none;transition:all 0.15s;font-weight:500;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='var(--accent-light)'">↓ Export CSV</button>
 
  <button id="newFileBtn" onclick="document.getElementById('fileInput').click()">↩ Open another file</button>
 
+  <button id="themeToggle" title="Toggle dark mode" onclick="toggleTheme()">🌙</button>
 </header>
 
 <div class="main">
@@ -181,7 +219,9 @@
   <div id="content">
     <div class="panel-row">
       <div class="panel">
-        <div class="panel-header">Structure <span class="count" id="groupCount">—</span></div>
+        <div class="panel-header">Structure <span class="count" id="groupCount">—</span>
+          <button id="sortToggle" onclick="toggleSort()" title="Toggle sort order" style="font-family:'IBM Plex Mono',monospace;font-size:10px;background:none;border:1px solid var(--border);color:var(--muted);padding:2px 8px;border-radius:4px;cursor:pointer;transition:all 0.15s;letter-spacing:0.5px;">A→Z</button>
+        </div>
         <div class="panel-body" id="treeContainer"></div>
       </div>
       <div class="panel data-panel">
@@ -442,11 +482,12 @@ function parseTDMS(buffer) {
 // TDMS paths look like: /  /'groupName'  /'groupName'/'channelName'
 function parsePaths(objects) {
   const groups = {};
+  groupCreationOrder = [];
   for (const [path, obj] of Object.entries(objects)) {
     const m = path.match(/^\/'([^']+)'(?:\/'([^']+)')?$|^\/$/);
     if (!m) continue;
     const gName = m[1] || '(root)', cName = m[2] || null;
-    if (!groups[gName]) groups[gName] = { groupObj:null, channels:{} };
+    if (!groups[gName]) { groups[gName] = { groupObj:null, channels:{} }; groupCreationOrder.push(gName); }
     if (cName) groups[gName].channels[cName] = { path, obj };
     else groups[gName].groupObj = obj;
   }
@@ -456,6 +497,15 @@ function parsePaths(objects) {
 
 //  UI
 let parsedGroups = {};
+let groupCreationOrder = []; // insertion order from the file
+let currentSort = 'name'; // 'name' | 'creation'
+
+function toggleSort() {
+  currentSort = currentSort === 'name' ? 'creation' : 'name';
+  document.getElementById('sortToggle').textContent = currentSort === 'name' ? 'A→Z' : '#';
+  document.getElementById('sortToggle').title = currentSort === 'name' ? 'Sort: alphabetical' : 'Sort: creation order';
+  buildTree(parsedGroups);
+}
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -475,11 +525,21 @@ function buildTree(groups) {
   const container = document.getElementById('treeContainer');
   container.innerHTML = '';
   
- const gNames = Object.keys(groups).sort((a, b) => {
-    if (a === '(root)') return -1;
-    if (b === '(root)') return 1;
-    return a.localeCompare(b);
-  });
+  let gNames;
+  if (currentSort === 'name') {
+    gNames = Object.keys(groups).sort((a, b) => {
+      if (a === '(root)') return -1;
+      if (b === '(root)') return 1;
+      return a.localeCompare(b);
+    });
+  } else {
+    // creation order: use groupCreationOrder, filter to only existing keys
+    gNames = groupCreationOrder.filter(n => n in groups);
+    // put (root) first if present
+    if (gNames.includes('(root)')) {
+      gNames = ['(root)', ...gNames.filter(n => n !== '(root)')];
+    }
+  }
 
   document.getElementById('groupCount').textContent = gNames.length+' group'+(gNames.length!==1?'s':'');
 
@@ -545,7 +605,7 @@ item.addEventListener('mouseenter', (e) => {
     const padding = 2;
     const plotHeight = PIXELS_Y - (padding * 2);
 
-    ctx.strokeStyle = '#00e5a0';
+    ctx.strokeStyle = '#2563eb';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     plotData.forEach((val, i) => {
@@ -803,10 +863,15 @@ document.querySelectorAll('.tab').forEach(tab=>{
 
 // version 1.0.2 : rajout d'un petit graphe preview
 //1.0.4 : les propriétés des groupes sont indiquées
+
+function toggleTheme() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  document.getElementById('themeToggle').textContent = isDark ? '☀️' : '🌙';
+}
 </script>
 
 <footer>
-  NitaD, Univ Paris-Saclay, Version 1.0.4 &middot; 05 April 2026
+  NitaD, Univ Paris-Saclay, Version 1.1.0 &middot; 27 April 2026
 </footer>
 
 <div id="channelPreview"></div>
