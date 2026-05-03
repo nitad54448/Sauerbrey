@@ -877,29 +877,37 @@ function updateGraphs() {
         const fStart = getY(cursorStart);
         const fEnd = getY(cursorEnd);
         const dt = cursorEnd - cursorStart;
-        
-        const calcThick = (fx) => {
-            const df = fx - baseF;
-            const ratio = Math.abs(df / baseF);
+
+        // Reference is the frequency at the start cursor (window-based baseline)
+        const fRef = fStart;
+
+        // Computes thickness deposited between fRef and fx
+        const calcThick = (fx, fRef) => {
+            const df = fx - fRef;
+            const ratio = Math.abs(df / fRef);
             let mass = 0;
             if (ratio < 0.02) {
                 const C = Math.sqrt(CONST.rho_q * CONST.mu_q) / (2 * f0 * f0);
-                mass = Math.abs(df) * C * area; 
+                mass = Math.abs(df) * C * area;
             } else {
                 const t1 = Math.sqrt(CONST.rho_q * CONST.mu_q) / (2 * Math.PI * fx * zfac);
-                const t2 = Math.atan(zfac * Math.tan(Math.PI * (baseF - fx) / baseF));
+                const t2 = Math.atan(zfac * Math.tan(Math.PI * (fRef - fx) / fRef));
                 mass = t1 * t2 * area;
             }
-            return (mass / (rho * area)) * 1e7; 
+            return (mass / (rho * area)) * 1e7;
         }
 
-        const thEnd = calcThick(fEnd);
-        const thStart = calcThick(fStart);
-        const rate = dt > 0.5 ? (Math.abs(thEnd - thStart) / dt) : 0;
+        // Thickness deposited within the cursor window
+        const thWindow = calcThick(fEnd, fRef);
+        const rate = dt > 0.5 ? (thWindow / dt) : 0;
 
-        document.getElementById('outThick').innerText = thEnd.toFixed(1);
+        // Method label reflects which branch was used
+        const ratio = Math.abs((fEnd - fRef) / fRef);
+        document.getElementById('outMethod').innerText = ratio < 0.02 ? "Sauerbrey" : "Z-match";
+
+        document.getElementById('outThick').innerText = thWindow.toFixed(1);
         document.getElementById('outRate').innerText = rate.toFixed(3);
-        document.getElementById('outDf').innerText = (fEnd - baseF).toFixed(0) + " Hz";
+        document.getElementById('outDf').innerText = (fEnd - fRef).toFixed(0) + " Hz";
         document.getElementById('outRange').innerText = `${cursorStart.toFixed(0)} - ${cursorEnd.toFixed(0)} s`;
     }
 
