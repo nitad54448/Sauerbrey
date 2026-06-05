@@ -133,7 +133,9 @@
   .props-table td { padding: 6px 12px; border-bottom: 1px solid var(--border2); vertical-align: top; }
   .props-table tr:hover td { background: var(--surface2); }
   .props-table .key { color: var(--accent2); }
-  .props-table .val { color: var(--text); word-break: break-all; }
+  
+  .props-table .val { color: var(--text); word-break: break-all; white-space: pre-wrap; }
+
   .props-table .tcell { color: var(--muted); font-size: 10px; }
 
   .values-wrap { overflow: auto; }
@@ -144,7 +146,7 @@
   .values-table td:first-child { color: var(--muted); }
   .values-table tr:hover td { background: var(--surface2); }
   .num { color: var(--num-color); }
-  .str { color: var(--str-color); }
+.str { color: var(--str-color); white-space: pre-wrap; }
 
   .truncate-note { text-align: center; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 10px; border-top: 1px solid var(--border2); margin-top: 8px; }
   .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 13px; gap: 10px; }
@@ -870,7 +872,7 @@ function toggleTheme() {
 </script>
 
 <footer>
-  NitaD, Univ Paris-Saclay, Version 1.1.0 &middot; 27 April 2026
+  NitaD, Univ Paris-Saclay, Version 1.2.0 &middot; 05 June 2026
 </footer>
 
 <div id="channelPreview"></div>
