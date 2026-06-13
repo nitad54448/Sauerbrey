@@ -668,7 +668,7 @@ function selectChannel(path, gName, cName, obj) {
     for (let i=0;i<shown.length;i++) {
       const v=shown[i];
       const cls=typeof v==='number'?'num':'str';
-      const d=typeof v==='number'?(Number.isInteger(v)?v:+v.toPrecision(10)):v;
+      const d=typeof v==='number'?(Number.isInteger(v)?v:+v.toPrecision(15)):v;
       html+=`<tr><td>${i}</td><td class="${cls}">${esc(String(d))}</td></tr>`;
     }
     html+='</tbody></table></div>';
@@ -872,7 +872,7 @@ function toggleTheme() {
 </script>
 
 <footer>
-  NitaD, Univ Paris-Saclay, Version 1.2.0 &middot; 05 June 2026
+  NitaD, Univ Paris-Saclay, Version 1.2.1 &middot; 13 June 2026
 </footer>
 
 <div id="channelPreview"></div>
