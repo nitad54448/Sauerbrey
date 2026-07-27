@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QCM Analyst</title>
+
+<!-- ── Libraries ─────────────────────────────────────────────────────
+     Loaded from this folder. 
+       https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js
+       https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js
+       https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js
+       https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js
+       https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
+     ───────────────────────────────────────────────────────────────── -->
+<script src="chart.umd.min.js"></script>
+<script src="hammer.min.js"></script>
+<script src="chartjs-plugin-zoom.min.js"></script>
+<script src="chartjs-plugin-annotation.min.js"></script>
+<script src="jspdf.umd.min.js"></script>
+
+<!-- Webfonts are cosmetic and load without blocking: if there is no
+     network the media stays "print", nothing is applied, and the page
+     falls back to the system stack. Delete these two lines for a
+     strictly offline build. -->
+<link rel="stylesheet" media="print" onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+:root{
+  --chassis:#15171b;
+  --chassis-2:#1b1e24;
+  --raised:#23272e;
+  --rule:#2f343c;
+  --txt:#e9e7e2;
+  --txt-dim:#8d939d;
+  --txt-faint:#5b616a;
+  --amber:#f0a22e;
+  --amber-deep:#c07c14;
+  --live:#57c08a;
+  --alert:#e0544b;
+
+  --paper:#f4f4f2;
+  --paper-2:#ffffff;
+  --paper-rule:#d9d9d4;
+  --paper-ink:#4a4f57;
+
+  --trace-f:#1b4d8f;
+  --trace-r:#b23a62;
+  --trace-p:#2f7d5b;
+
+  --f-label:'Barlow Semi Condensed','Arial Narrow',sans-serif;
+  --f-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --f-data:'JetBrains Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; overflow:hidden;
+  font-family:var(--f-ui); font-size:14px;
+  background:var(--chassis); color:var(--txt);
+  display:grid; grid-template-columns:340px 4px 1fr;
+}
+:focus-visible{outline:2px solid var(--amber); outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ── eyebrow labels: silkscreen on an instrument face ───────────── */
+.eyebrow{
+  font-family:var(--f-label); font-weight:600; font-size:11px;
+  text-transform:uppercase; letter-spacing:.14em; color:var(--txt-faint);
+}
+
+/* ── CHASSIS (left) ─────────────────────────────────────────────── */
+.chassis{
+  background:var(--chassis-2); border-right:1px solid var(--rule);
+  display:flex; flex-direction:column; min-height:0;
+}
+.chassis-head{
+  padding:14px 18px 12px; border-bottom:1px solid var(--rule);
+  display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+}
+.chassis-head h1{
+  margin:0; font-family:var(--f-label); font-weight:700; font-size:19px;
+  letter-spacing:.06em; text-transform:uppercase;
+}
+.chassis-head h1 em{font-style:normal; color:var(--amber)}
+.build{font-family:var(--f-data); font-size:10px; color:var(--txt-faint)}
+
+.chassis-body{
+  flex:1; min-height:0; overflow-y:auto; padding:18px;
+  display:flex; flex-direction:column; gap:22px;
+}
+.block{display:flex; flex-direction:column; gap:9px}
+.block-head{display:flex; align-items:center; gap:10px}
+.block-head .eyebrow{white-space:nowrap}
+.block-head .rule{flex:1; height:1px; background:var(--rule)}
+
+/* source button */
+.source{
+  width:100%; display:flex; align-items:center; gap:10px;
+  background:var(--raised); color:var(--txt);
+  border:1px solid var(--rule); border-radius:3px;
+  padding:11px 12px; cursor:pointer; text-align:left;
+  font-family:var(--f-ui); font-size:13px; font-weight:500;
+  transition:border-color .15s,background .15s;
+}
+.source:hover{border-color:var(--txt-faint)}
+.source .led{
+  width:7px; height:7px; border-radius:50%; flex:none;
+  background:var(--txt-faint); box-shadow:none; transition:opacity .1s;
+}
+.source .name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.source.live{border-color:rgba(87,192,138,.45)}
+.source.live .led{background:var(--live); box-shadow:0 0 7px var(--live)}
+.source.live .led.pulse{opacity:.25}
+.source.fault{border-color:rgba(224,84,75,.5)}
+.source.fault .led{background:var(--alert); box-shadow:0 0 7px var(--alert)}
+.source-note{font-family:var(--f-data); font-size:10.5px; color:var(--txt-faint); min-height:13px}
+.source-note.fault{color:var(--alert)}
+
+/* fields */
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+.field label{display:block; font-family:var(--f-label); font-size:11px;
+  text-transform:uppercase; letter-spacing:.1em; color:var(--txt-dim); margin-bottom:4px}
+.field input,.field select{
+  width:100%; background:var(--chassis); color:var(--txt);
+  border:1px solid var(--rule); border-radius:3px; padding:7px 8px;
+  font-family:var(--f-data); font-size:13px;
+}
+.field input:hover,.field select:hover{border-color:var(--txt-faint)}
+.field input:focus,.field select:focus{outline:none; border-color:var(--amber)}
+.field input.bad{border-color:var(--alert)}
+
+/* ── SIGNATURE: the readout well ────────────────────────────────── */
+.well{
+  position:relative; border-radius:4px; overflow:hidden;
+  background:#0c0e11; border:1px solid #000;
+  box-shadow:inset 0 2px 10px rgba(0,0,0,.85), 0 1px 0 rgba(255,255,255,.04);
+  padding:14px 16px 12px;
+}
+.well::after{ /* scanlines */
+  content:''; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background:repeating-linear-gradient(to bottom,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);
+}
+.readout-main{display:flex; align-items:flex-end; justify-content:space-between; gap:10px}
+.readout-main .v{
+  font-family:var(--f-data); font-weight:700; font-size:40px; line-height:.95;
+  color:var(--amber); text-shadow:0 0 16px rgba(240,162,46,.35);
+  font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+}
+.readout-main .u{font-family:var(--f-label); font-size:12px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--amber-deep); padding-bottom:5px}
+.readout-sub{
+  display:flex; align-items:baseline; justify-content:space-between;
+  margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.07);
+}
+.readout-sub .v{font-family:var(--f-data); font-weight:500; font-size:19px;
+  color:var(--txt); font-variant-numeric:tabular-nums}
+.readout-sub .u{font-family:var(--f-label); font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--txt-faint)}
+
+.meta{margin-top:10px; display:flex; flex-direction:column; gap:5px}
+.meta-row{display:flex; justify-content:space-between; gap:10px;
+  font-family:var(--f-data); font-size:11px; color:var(--txt-faint)}
+.meta-row b{font-weight:500; color:var(--txt-dim)}
+.meta-row b.flag{color:var(--amber)}
+
+/* IFF */
+.iff-row{display:flex; gap:8px; align-items:flex-end}
+.iff-row .field{flex:1}
+.btn-sm{
+  font-family:var(--f-label); font-size:11.5px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase;
+  background:transparent; color:var(--txt-dim);
+  border:1px solid var(--rule); border-radius:3px;
+  padding:7px 10px; cursor:pointer; white-space:nowrap;
+  transition:border-color .15s,color .15s;
+}
+.btn-sm:hover{border-color:var(--txt-dim); color:var(--txt)}
+.iff-out{display:flex; align-items:baseline; justify-content:space-between; margin-top:4px}
+.iff-out .v{font-family:var(--f-data); font-weight:700; font-size:17px; color:var(--live)}
+
+.chassis-foot{padding:14px 18px; border-top:1px solid var(--rule); background:var(--chassis)}
+.btn-report{
+  width:100%; padding:12px; cursor:pointer; border-radius:3px;
+  background:var(--amber); color:#1a1204; border:1px solid var(--amber);
+  font-family:var(--f-label); font-weight:700; font-size:13px;
+  letter-spacing:.12em; text-transform:uppercase;
+  transition:filter .15s;
+}
+.btn-report:hover{filter:brightness(1.08)}
+.btn-report[disabled]{opacity:.35; cursor:not-allowed}
+
+/* ── GUTTER ─────────────────────────────────────────────────────── */
+.gutter{background:var(--chassis); cursor:col-resize; transition:background .15s}
+.gutter:hover,.gutter.grabbing{background:var(--amber)}
+
+/* ── STAGE (right) ──────────────────────────────────────────────── */
+.stage{
+  background:var(--paper); display:flex; flex-direction:column;
+  min-width:0; min-height:0; overflow:hidden;
+}
+
+.tabs{display:flex; align-items:stretch; gap:0; padding:0 14px;
+  border-bottom:1px solid var(--paper-rule); background:#ececeb; flex:none}
+.tab{
+  position:relative; background:transparent; border:none; cursor:pointer;
+  padding:13px 20px 12px; margin-bottom:-1px;
+  font-family:var(--f-label); font-weight:600; font-size:12.5px;
+  letter-spacing:.13em; text-transform:uppercase; color:#8a8f96;
+  border-bottom:2px solid transparent; transition:color .15s;
+  display:flex; align-items:center; gap:8px;
+}
+.tab:hover{color:var(--paper-ink)}
+.tab[aria-selected="true"]{color:#20242a; border-bottom-color:var(--trace-f)}
+.tab .dot{width:6px; height:6px; border-radius:50%; flex:none}
+.tab-spacer{flex:1}
+.stage-status{display:flex; align-items:center; padding-right:4px;
+  font-family:var(--f-data); font-size:11px; color:#8a8f96}
+
+/* toolbar — identical on both tabs */
+.toolbar{
+  flex:none; display:flex; align-items:center; flex-wrap:wrap; gap:14px;
+  padding:9px 14px; background:var(--paper);
+  border-bottom:1px solid var(--paper-rule);
+}
+.tgroup{display:flex; align-items:center; gap:7px}
+.tgroup > .eyebrow{color:#9aa0a7; font-size:10px}
+.tgroup + .tgroup{padding-left:14px; border-left:1px solid var(--paper-rule)}
+.btn{
+  font-family:var(--f-ui); font-size:12px; font-weight:500;
+  background:var(--paper-2); color:var(--paper-ink);
+  border:1px solid var(--paper-rule); border-radius:3px;
+  padding:5px 10px; cursor:pointer; white-space:nowrap;
+  transition:border-color .15s,background .15s,color .15s;
+}
+.btn:hover{border-color:#a9aeb4}
+.btn[aria-pressed="true"]{background:var(--trace-f); border-color:var(--trace-f); color:#fff}
+.btn.danger:hover{border-color:var(--alert); color:var(--alert)}
+.btn[disabled]{opacity:.4; cursor:not-allowed}
+.hint{font-family:var(--f-data); font-size:10.5px; color:#9aa0a7}
+
+/* plot deck: both panels stay laid out so canvases keep their size
+   (hidden tab still renders → PDF export and tab switches are instant) */
+.deck{position:relative; flex:1; min-height:0; margin:12px 14px 14px}
+.panel{position:absolute; inset:0; display:flex; flex-direction:column; gap:12px;
+  transition:opacity .12s}
+.panel[hidden]{display:flex; visibility:hidden; opacity:0; pointer-events:none}
+.panel.row{flex-direction:row}
+
+.plot{
+  background:var(--paper-2); border:1px solid var(--paper-rule); border-radius:3px;
+  display:flex; flex-direction:column; min-width:0; min-height:0; flex:1;
+  padding:10px 12px 12px; position:relative;
+}
+.plot-head{display:flex; align-items:baseline; justify-content:space-between;
+  gap:10px; margin-bottom:6px; flex:none}
+.plot-title{font-family:var(--f-label); font-weight:700; font-size:12px;
+  letter-spacing:.13em; text-transform:uppercase}
+.plot-sub{font-family:var(--f-data); font-size:10.5px; color:#9aa0a7}
+.canvas-wrap{flex:1; min-height:0; position:relative}
+
+.curtain{
+  position:absolute; inset:0; z-index:5; background:rgba(255,255,255,.94);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:8px; color:#8a8f96; text-align:center; padding:20px; pointer-events:none;
+}
+.curtain strong{font-family:var(--f-label); font-weight:600; font-size:15px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--paper-ink)}
+.curtain span{font-size:12.5px; max-width:320px}
+
+.dropping .deck{outline:2px dashed var(--trace-f); outline-offset:4px}
+
+/* fatal dependency banner */
+.fatal{
+  position:fixed; inset:0; z-index:999; background:var(--chassis);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:12px; padding:40px; text-align:center; overflow:auto;
+}
+.fatal h2{font-family:var(--f-label); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--alert); margin:0}
+.fatal p{max-width:560px; color:var(--txt-dim); line-height:1.6; margin:0}
+.fatal code{font-family:var(--f-data); font-size:12px; color:var(--amber)}
+.fatal-list{list-style:none; margin:4px 0 0; padding:0; max-width:640px;
+  display:flex; flex-direction:column; gap:10px; text-align:left}
+.fatal-list li{background:var(--chassis-2); border:1px solid var(--rule);
+  border-radius:3px; padding:10px 12px}
+.fatal-list span{font-family:var(--f-data); font-size:11px; color:var(--txt-faint); word-break:break-all}
+.fatal-tip{font-size:13px}
+
+::-webkit-scrollbar{width:9px; height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--rule); border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:var(--txt-faint)}
+</style>
+</head>
+<body>
+
+<!-- ═══ CHASSIS ═══════════════════════════════════════════════════ -->
+<aside class="chassis">
+  <div class="chassis-head">
+    <h1>QCM <em>Analyst</em></h1>
+    <span class="build">r3 · 2026-07</span>
+  </div>
+
+  <div class="chassis-body">
+
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Source</span><span class="rule"></span></div>
+      <button id="btnSource" class="source" onclick="openFile()">
+        <span id="srcLed" class="led"></span>
+        <span id="srcName" class="name">Open a log file</span>
+      </button>
+      <div id="srcNote" class="source-note">Or drop a file anywhere on this window.</div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Crystal</span><span class="rule"></span></div>
+      <div class="grid2">
+        <div class="field"><label for="pF0">f₀ (MHz)</label>
+          <input type="number" id="pF0" value="6.0" step="0.1" min="0.1" oninput="recalc()"></div>
+        <div class="field"><label for="pDiam">Ø (mm)</label>
+          <input type="number" id="pDiam" value="10.0" step="0.1" min="0.1" oninput="recalc()"></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Film</span><span class="rule"></span></div>
+      <div class="field"><label for="pMat">Material</label>
+        <select id="pMat" onchange="applyPreset()">
+          <option value="custom">Custom</option>
+          <option value="Au">Gold (Au)</option>
+          <option value="Ag">Silver (Ag)</option>
+          <option value="Cr">Chromium (Cr)</option>
+          <option value="Ti" selected>Titanium (Ti)</option>
+          <option value="Pt">Platinum (Pt)</option>
+          <option value="Cu">Copper (Cu)</option>
+          <option value="Al">Aluminium (Al)</option>
+          <option value="SiO2">Silica (SiO₂)</option>
+        </select>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="pRho">ρ (g/cm³)</label>
+          <input type="number" id="pRho" value="4.506" step="0.001" min="0.001" oninput="onMatEdit()"></div>
+        <div class="field"><label for="pZ">Z-factor</label>
+          <input type="number" id="pZ" value="0.628" step="0.001" min="0.001" oninput="onMatEdit()"></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Cursor window</span><span class="rule"></span></div>
+      <div class="well">
+        <div class="readout-main">
+          <span id="outRate" class="v">—</span>
+          <span class="u">nm / s</span>
+        </div>
+        <div class="readout-sub">
+          <span class="u">Thickness</span>
+          <span><span id="outThick" class="v">—</span> <span class="u">nm</span></span>
+        </div>
+      </div>
+      <div class="meta">
+        <div class="meta-row"><span>Window</span><b id="outRange">—</b></div>
+        <div class="meta-row"><span>Δf</span><b id="outDf">—</b></div>
+        <div class="meta-row"><span>Model</span><b id="outMethod">—</b></div>
+        <div class="meta-row"><span>Input column</span><b id="outInput" class="flag">—</b></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Ionisation efficiency</span><span class="rule"></span></div>
+      <div class="iff-row">
+        <div class="field"><label for="iffRef">Reference rate v_tot (nm/s)</label>
+          <input type="number" id="iffRef" step="0.001" placeholder="0.000"></div>
+        <button class="btn-sm" onclick="useCurrentRate()" title="Copy the current deposition rate into the reference field">Use</button>
+      </div>
+      <div class="iff-out">
+        <button class="btn-sm" onclick="calcIFF()">Calculate</button>
+        <span id="iffOut" class="v">—</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="chassis-foot">
+    <button id="btnReport" class="btn-report" onclick="makePDF()" disabled>Generate report</button>
+  </div>
+</aside>
+
+<div class="gutter" id="resizer" role="separator" aria-orientation="vertical" aria-label="Resize panel"></div>
+
+<!-- ═══ STAGE ═════════════════════════════════════════════════════ -->
+<main class="stage">
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabFreq" aria-selected="true" aria-controls="panelFreq"
+            onclick="showTab('freq')"><span class="dot" style="background:var(--trace-f)"></span>Frequency</button>
+    <button class="tab" role="tab" id="tabRP" aria-selected="false" aria-controls="panelRP"
+            onclick="showTab('rp')">
+      <span class="dot" style="background:var(--trace-r)"></span>
+      <span class="dot" style="background:var(--trace-p); margin-left:-4px"></span>
+      R &amp; Phase</button>
+    <span class="tab-spacer"></span>
+    <span class="stage-status" id="stageStatus">no data</span>
+  </div>
+
+  <!-- one toolbar, same controls whichever tab is open -->
+  <div class="toolbar">
+    <div class="tgroup">
+      <span class="eyebrow">View</span>
+      <button class="btn" id="btnZoom" aria-pressed="false" onclick="toggleZoom()"
+              title="Drag on a plot to zoom into a time span">Box zoom</button>
+      <button class="btn" id="btnFollow" aria-pressed="false" onclick="toggleFollow()"
+              title="Keep the newest data in view as the file grows">Follow live</button>
+      <button class="btn" onclick="resetView()" title="Show the full time span">Fit all</button>
+    </div>
+    <div class="tgroup">
+      <span class="eyebrow">Cursors</span>
+      <button class="btn" id="btnSnap" aria-pressed="false" onclick="toggleSnap()"
+              title="Keep cursors pinned to the edges of the visible span">Snap to view</button>
+      <button class="btn" onclick="cursorsToView()" title="Move both cursors to the edges of the visible span">Reset cursors</button>
+    </div>
+    <div class="tgroup">
+      <span class="eyebrow">Data</span>
+      <button class="btn" onclick="decimateVisible()" title="Keep every second point inside the visible span">Thin ×2</button>
+      <button class="btn danger" onclick="removeVisible()" title="Delete every point inside the visible span">Delete visible</button>
+    </div>
+    <span class="hint" id="toolHint">Drag a cursor line to set the window · Shift + drag to pan</span>
+  </div>
+
+  <div class="deck">
+    <!-- Tab 1 -->
+    <section class="panel" id="panelFreq" role="tabpanel" aria-labelledby="tabFreq">
+      <div class="plot">
+        <div class="plot-head">
+          <span class="plot-title" style="color:var(--trace-f)">Frequency</span>
+          <span class="plot-sub" id="subFreq">Hz</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="chartF"></canvas>
+          <div class="curtain" id="curtain">
+            <strong>Ready to monitor</strong>
+            <span>Open a log file, or drop one on this window. New lines are read as they are written.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2 -->
+    <section class="panel row" id="panelRP" role="tabpanel" aria-labelledby="tabRP" hidden>
+      <div class="plot">
+        <div class="plot-head">
+          <span class="plot-title" style="color:var(--trace-r)">Resistance</span>
+          <span class="plot-sub">Ω</span>
+        </div>
+        <div class="canvas-wrap"><canvas id="chartR"></canvas></div>
+      </div>
+      <div class="plot">
+        <div class="plot-head">
+          <span class="plot-title" style="color:var(--trace-p)">Phase angle</span>
+          <span class="plot-sub">degrees</span>
+        </div>
+        <div class="canvas-wrap"><canvas id="chartP"></canvas></div>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<script>
+"use strict";
+
+/* ═══ CONSTANTS ═══════════════════════════════════════════════════ */
+const PRESETS = {
+  Au:{rho:19.30,z:0.381}, Ag:{rho:10.50,z:0.529}, Cr:{rho:7.19,z:0.305},
+  Ti:{rho:4.506,z:0.628}, Pt:{rho:21.45,z:0.245}, Cu:{rho:8.96,z:0.437},
+  Al:{rho:2.70,z:1.080},  SiO2:{rho:2.20,z:1.000}
+};
+// cgs: g/cm^3 and g/(cm*s^2)
+const RHO_Q = 2.648, MU_Q = 2.947e11;
+const SAUERBREY_LIMIT = 0.02;   // |Δf/f| below which the linear model is used
+const ZMATCH_LIMIT    = 0.40;   // |Δf/f| above which tan() is unusable
+const POLL_MS = 1000;
+
+/* ═══ STATE ═══════════════════════════════════════════════════════ */
+let fileHandle = null, pollTimer = null, polling = false;
+let fileOffset = 0, carry = "", faults = 0;
+
+let D = {t:[], f:[], r:[], p:[]};   // f = raw column 2, as written in the file
+let signalIsShift = false;          // true when column 2 holds Δf, not absolute f
+let started = false;
+
+let charts = [], cF, cR, cP;
+let cursorA = 0, cursorB = 0, dragging = null;
+
+let view = {min:null, max:null};    // null = follow the full data extent
+let zoomMode = false, snapMode = false, followLive = false;
+let syncing = false;
+let activeTab = 'freq';
+
+/* ═══ SMALL HELPERS ═══════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const num = id => {
+  const v = parseFloat($(id).value);
+  return Number.isFinite(v) ? v : NaN;
+};
+const hasData = () => D.t.length > 0;
+const tFirst = () => D.t[0];
+const tLast  = () => D.t[D.t.length - 1];
+
+function fmtAxis(v){
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 1e6 || a < 1e-3) return v.toExponential(2);
+  if (a >= 1e4) return Math.round(v).toLocaleString('en-US');
+  return String(Number(v.toPrecision(6)));
+}
+
+/* ═══ BOOT ════════════════════════════════════════════════════════ */
+/* Each library, the filename this page expects next to it, and where to
+   get it. Used by the startup check so a missing file names itself. */
+const LIBS = [
+  {file:'chart.umd.min.js',                url:'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js',
+   present:() => typeof Chart !== 'undefined'},
+  {file:'hammer.min.js',                   url:'https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js',
+   present:() => typeof Hammer !== 'undefined'},
+  {file:'chartjs-plugin-zoom.min.js',      url:'https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js',
+   present:() => hasPlugin('zoom')},
+  {file:'chartjs-plugin-annotation.min.js',url:'https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js',
+   present:() => hasPlugin('annotation')},
+  {file:'jspdf.umd.min.js',                url:'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+   present:() => !!window.jspdf}
+];
+
+function hasPlugin(id){
+  try { return !!Chart.registry.plugins.get(id); } catch { return false; }
+}
+
+window.addEventListener('load', () => {
+  const missing = LIBS.filter(l => { try { return !l.present(); } catch { return true; } });
+  if (missing.length){ showFatal(missing); return; }
+
+  initCharts();
+  initResizer();
+  initDropZone();
+  charts.forEach(c => attachCursorHandlers(c));
+  recalc();
+});
+
+function showFatal(missing){
+  const rows = missing.map(l =>
+    '<li><code>' + l.file + '</code><br><span>' + l.url + '</span></li>').join('');
+  const el = document.createElement('div');
+  el.className = 'fatal';
+  el.innerHTML =
+    '<h2>' + missing.length + ' librar' + (missing.length === 1 ? 'y is' : 'ies are') + ' missing</h2>' +
+    '<p>Save the file' + (missing.length === 1 ? '' : 's') +
+    ' below into the same folder as this page, keeping the name' +
+    (missing.length === 1 ? '' : 's') + ' unchanged, then reload.</p>' +
+    '<ul class="fatal-list">' + rows + '</ul>' +
+    '<p class="fatal-tip">If the files are already there and this message persists, the browser may be ' +
+    'blocking them. Serve the folder instead: run <code>python -m http.server 8000</code> in it ' +
+    'and open <code>http://localhost:8000/</code>.</p>';
+  document.body.appendChild(el);
+}
+
+/* ═══ TABS ════════════════════════════════════════════════════════ */
+function showTab(which){
+  activeTab = which;
+  const onFreq = which === 'freq';
+  $('panelFreq').hidden = !onFreq;
+  $('panelRP').hidden   =  onFreq;
+  $('tabFreq').setAttribute('aria-selected', String(onFreq));
+  $('tabRP').setAttribute('aria-selected', String(!onFreq));
+  requestAnimationFrame(() => charts.forEach(c => c.resize()));
+}
+
+/* ═══ FILE ════════════════════════════════════════════════════════ */
+async function openFile(){
+  if (!window.showOpenFilePicker){
+    setNote('This browser cannot watch a file. Use Chrome or Edge, or drop a file for a one-off read.', true);
+    return;
+  }
+  try {
+    const [h] = await window.showOpenFilePicker();
+    startWatching(h);
+  } catch { /* picker dismissed */ }
+}
+
+function startWatching(handle){
+  fileHandle = handle;
+  resetData();
+  $('btnSource').classList.remove('fault');
+  $('btnSource').classList.add('live');
+  $('srcName').textContent = handle.name;
+  setNote('Watching · polling every ' + (POLL_MS/1000) + ' s');
+  /* curtain is managed by redraw() */
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(poll, POLL_MS);
+  poll();
+}
+
+function loadStaticFile(file){
+  stopWatching();
+  resetData();
+  $('btnSource').classList.remove('fault');
+  $('btnSource').classList.add('live');
+  $('srcName').textContent = file.name;
+  setNote('Snapshot only — this browser cannot watch the file for changes.');
+  /* curtain is managed by redraw() */
+  file.text().then(txt => { ingest(txt); flushCarry(); });
+}
+
+function stopWatching(){
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null; fileHandle = null;
+}
+
+function setNote(msg, isFault){
+  const n = $('srcNote');
+  n.textContent = msg;
+  n.classList.toggle('fault', !!isFault);
+}
+
+async function poll(){
+  if (!fileHandle || polling) return;   // never let two reads overlap
+  polling = true;
+  const btn = $('btnSource'), led = $('srcLed');
+  try {
+    const file = await fileHandle.getFile();
+
+    if (faults){ faults = 0; btn.classList.remove('fault'); setNote('Watching · polling every ' + (POLL_MS/1000) + ' s'); }
+    btn.classList.add('live');
+
+    if (file.size < fileOffset){         // file truncated → run restarted
+      resetData();
+      setNote('File restarted — buffer cleared');
+    }
+
+    if (file.size > fileOffset){
+      led.classList.add('pulse');
+      const text = await file.slice(fileOffset, file.size).text();
+      fileOffset = file.size;
+      ingest(text);
+      setTimeout(() => led.classList.remove('pulse'), 140);
+    }
+  } catch (err){
+    faults++;
+    btn.classList.add('fault');
+    setNote(faults < 4
+      ? 'File locked by the acquisition software — retrying'
+      : 'Cannot read the file (' + faults + ' attempts). Check that it still exists and that access is still granted.', true);
+  } finally {
+    polling = false;
+  }
+}
+
+/* ═══ PARSING ═════════════════════════════════════════════════════
+   Two things the old reader got wrong:
+   1. a leading '-' was treated as a comment marker, so every row that
+      began with a negative number was thrown away;
+   2. a chunk could end mid-line, and the tail arrived next poll as a
+      headless fragment that could still parse into a bogus point.
+   Fixed with a numeric whitelist and a carry buffer.
+   ════════════════════════════════════════════════════════════════ */
+const NUMERIC_LINE = /^[+\-0-9.,;eE\s]+$/;
+
+function splitCols(line){
+  if (line.includes(';'))  return line.split(';').map(s => s.replace(',', '.').trim());
+  if (/\s/.test(line))     return line.replace(/,/g, '.').split(/\s+/);
+  return line.split(',');                       // plain CSV, '.' decimals
+}
+
+function ingest(chunk){
+  const text = carry + chunk;
+  const lines = text.split(/\r?\n/);
+  carry = lines.pop();                          // last element is incomplete unless the chunk ended with a newline
+  consume(lines);
+}
+
+function flushCarry(){                          // static reads have no more data coming
+  if (carry.trim()) { consume([carry]); }
+  carry = "";
+}
+
+function consume(lines){
+  let added = 0;
+
+  for (const raw of lines){
+    const line = raw.trim();
+    if (!line || !NUMERIC_LINE.test(line)) continue;
+
+    const cols = splitCols(line).filter(s => s !== "");
+    if (cols.length < 4) continue;
+
+    const t = parseFloat(cols[0]), f = parseFloat(cols[1]);
+    const r = parseFloat(cols[2]), p = parseFloat(cols[3]);
+    if (![t, f, r, p].every(Number.isFinite)) continue;
+
+    D.t.push(t); D.f.push(f); D.r.push(r); D.p.push(p);
+    added++;
+  }
+  if (!added) return;
+
+  const prevEnd = D.t.length - 1 - added;
+  const wasAtEnd = prevEnd >= 0 && cursorB === D.t[prevEnd];
+
+  if (!started){
+    started = true;
+    cursorA = tFirst();
+    cursorB = tLast();
+    $('btnReport').disabled = false;
+  } else if (wasAtEnd){
+    cursorB = tLast();                          // keep tracking the live edge
+  }
+
+  if (followLive && view.min !== null){         // slide the window, preserve its width
+    const width = view.max - view.min;
+    view.max = tLast();
+    view.min = Math.max(tFirst(), view.max - width);
+  }
+
+  redraw();
+  recalc();
+}
+
+function resetData(){
+  D = {t:[], f:[], r:[], p:[]};
+  fileOffset = 0; carry = ""; started = false;
+  cursorA = 0; cursorB = 0;
+  view = {min:null, max:null};
+  $('btnReport').disabled = true;
+  $('stageStatus').textContent = 'no data';
+  charts.forEach(c => { c.data.datasets[0].data = []; });
+  redraw();
+  recalc();
+}
+
+/* ═══ CHARTS ══════════════════════════════════════════════════════ */
+function makeOptions(color){
+  return {
+    responsive:true,
+    maintainAspectRatio:false,
+    animation:false,
+    parsing:false,
+    normalized:true,
+    interaction:{mode:'nearest', axis:'x', intersect:false},
+    elements:{
+      // hide markers once the trace is dense — keeps long runs responsive
+      point:{ radius: ctx => (ctx.chart.data.datasets[0].data.length > 1500 ? 0 : 1.8), hitRadius:5 },
+      line:{ borderWidth:1.4, tension:0, borderColor:color }
+    },
+    scales:{
+      x:{ type:'linear',
+          title:{display:true, text:'time (s)', color:'#9aa0a7',
+                 font:{family:"'Barlow Semi Condensed', sans-serif", size:11}},
+          grid:{color:'#f0f0ee'},
+          border:{color:'#d9d9d4'},
+          ticks:{color:'#787e86', maxTicksLimit:9,
+                 font:{family:"'JetBrains Mono', monospace", size:10}} },
+      y:{ grid:{color:'#eeeeec'},
+          border:{color:'#d9d9d4'},
+          ticks:{color:'#787e86', maxTicksLimit:7, callback:fmtAxis,
+                 font:{family:"'JetBrains Mono', monospace", size:10}} }
+    },
+    plugins:{
+      legend:{display:false},
+      tooltip:{
+        displayColors:false, backgroundColor:'#15171b', padding:8, cornerRadius:3,
+        titleFont:{family:"'JetBrains Mono', monospace", size:11},
+        bodyFont:{family:"'JetBrains Mono', monospace", size:11},
+        callbacks:{ title: it => 't = ' + Number(it[0].parsed.x).toFixed(2) + ' s',
+                    label: it => fmtAxis(it.parsed.y) }
+      },
+      annotation:{
+        annotations:{
+          cursorA:{type:'line', scaleID:'x', value:0, borderColor:'#2f7d5b', borderWidth:1.5,
+                   label:{display:true, content:'A', position:'start', backgroundColor:'#2f7d5b',
+                          font:{family:"'Barlow Semi Condensed', sans-serif", size:11, weight:'700'},
+                          padding:3, yAdjust:0}},
+          cursorB:{type:'line', scaleID:'x', value:0, borderColor:'#b23a62', borderWidth:1.5,
+                   label:{display:true, content:'B', position:'start', backgroundColor:'#b23a62',
+                          font:{family:"'Barlow Semi Condensed', sans-serif", size:11, weight:'700'},
+                          padding:3, yAdjust:0}}
+        }
+      },
+      // NOTE: no `limits:{x:{min:'original'}}` here. The old build captured
+      // "original" while the chart was still empty, which locked pan/zoom to
+      // the 0–1 range forever. The view range is owned by `view` instead.
+      zoom:{
+        pan:{enabled:true, mode:'x', modifierKey:'shift', onPan:onViewChange, onPanComplete:afterViewChange},
+        zoom:{
+          wheel:{enabled:true}, pinch:{enabled:true},
+          drag:{enabled:false, backgroundColor:'rgba(27,77,143,.12)', borderColor:'#1b4d8f', borderWidth:1, threshold:8},
+          mode:'x', onZoom:onViewChange, onZoomComplete:afterViewChange
+        }
+      }
+    }
+  };
+}
+
+function initCharts(){
+  const mk = (id, color) => new Chart($(id), {
+    type:'line',
+    data:{datasets:[{data:[], borderColor:color, pointBackgroundColor:color, pointBorderColor:color}]},
+    options:makeOptions(color)
+  });
+  const css = getComputedStyle(document.documentElement);
+  cF = mk('chartF', css.getPropertyValue('--trace-f').trim());
+  cR = mk('chartR', css.getPropertyValue('--trace-r').trim());
+  cP = mk('chartP', css.getPropertyValue('--trace-p').trim());
+  charts = [cF, cR, cP];
+}
+
+/* Column 2 may be absolute frequency or a shift. Decide from magnitude
+   against the nominal f0, and expose the verdict in the sidebar. */
+function detectSignal(){
+  const f0 = num('pF0') * 1e6;
+  signalIsShift = hasData() && Number.isFinite(f0) && Math.abs(D.f[0]) < 0.5 * f0;
+  return f0;
+}
+const absF = i => D.f[i] + (signalIsShift ? num('pF0') * 1e6 : 0);
+
+function redraw(){
+  $('curtain').style.display = hasData() ? 'none' : 'flex';
+  if (!hasData()){
+    $('subFreq').textContent = 'Hz';
+    $('stageStatus').textContent = 'no data';
+    charts.forEach(c => c.update('none'));
+    return;
+  }
+  detectSignal();
+
+  // plot the frequency trace relative to its own minimum so the shape is readable
+  let minF = D.f[0];
+  for (let i = 1; i < D.f.length; i++) if (D.f[i] < minF) minF = D.f[i];
+
+  const n = D.t.length;
+  const dF = new Array(n), dR = new Array(n), dP = new Array(n);
+  for (let i = 0; i < n; i++){
+    dF[i] = {x:D.t[i], y:D.f[i] - minF};
+    dR[i] = {x:D.t[i], y:D.r[i]};
+    dP[i] = {x:D.t[i], y:D.p[i]};
+  }
+  cF.data.datasets[0].data = dF;
+  cR.data.datasets[0].data = dR;
+  cP.data.datasets[0].data = dP;
+
+  $('subFreq').textContent = 'Hz, offset by ' + minF.toFixed(1) + ' · ' + n.toLocaleString('en-US') + ' points';
+  $('stageStatus').textContent =
+    n.toLocaleString('en-US') + ' points · ' + tFirst().toFixed(1) + '–' + tLast().toFixed(1) + ' s';
+
+  applyView();
+  paintCursors();
+}
+
+/* ── one owner for the x range ─────────────────────────────────── */
+function applyView(){
+  if (!hasData()) return;
+  const lo = view.min !== null ? view.min : tFirst();
+  const hi = view.max !== null ? view.max : tLast();
+  charts.forEach(c => {
+    c.options.scales.x.min = lo;
+    c.options.scales.x.max = hi;
+    c.update('none');
+  });
+}
+
+function onViewChange({chart}){
+  if (syncing) return;
+  syncing = true;
+  view.min = chart.scales.x.min;
+  view.max = chart.scales.x.max;
+  charts.forEach(c => {
+    if (c === chart) return;
+    c.options.scales.x.min = view.min;
+    c.options.scales.x.max = view.max;
+    c.update('none');
+  });
+  syncing = false;
+}
+function afterViewChange(){ if (snapMode) cursorsToView(); }
+
+function resetView(){
+  view = {min:null, max:null};
+  applyView();
+  if (snapMode) cursorsToView();
+}
+
+/* ── cursors ───────────────────────────────────────────────────── */
+function paintCursors(){
+  charts.forEach(c => {
+    const a = c.options.plugins.annotation.annotations;
+    a.cursorA.value = cursorA;
+    a.cursorB.value = cursorB;
+    c.update('none');
+  });
+}
+
+function cursorsToView(){
+  if (!hasData()) return;
+  const lo = view.min !== null ? view.min : tFirst();
+  const hi = view.max !== null ? view.max : tLast();
+  cursorA = Math.max(tFirst(), lo);
+  cursorB = Math.min(tLast(), hi);
+  paintCursors();
+  recalc();
+}
+
+function attachCursorHandlers(chart){
+  const canvas = chart.canvas;
+
+  const valueAt = e => {
+    const rect = canvas.getBoundingClientRect();
+    return chart.scales.x.getValueForPixel(e.clientX - rect.left);
+  };
+  const grab = e => {
+    const v = valueAt(e);
+    const span = chart.scales.x.max - chart.scales.x.min;
+    if (!Number.isFinite(v) || !(span > 0)) return null;
+    const tol = span * 0.04;
+    const dA = Math.abs(v - cursorA), dB = Math.abs(v - cursorB);
+    if (Math.min(dA, dB) > tol) return null;
+    return dA <= dB ? 'A' : 'B';
+  };
+
+  canvas.addEventListener('pointermove', e => {
+    if (zoomMode || dragging || !hasData()) return;
+    canvas.style.cursor = grab(e) ? 'ew-resize' : 'default';
+  });
+
+  canvas.addEventListener('pointerdown', e => {
+    if (zoomMode || e.shiftKey || !hasData()) return;
+    const which = grab(e);
+    if (!which) return;
+    dragging = {which, chart};
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault(); e.stopPropagation();
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    if (!dragging || dragging.chart !== chart) return;
+    let v = valueAt(e);
+    if (!Number.isFinite(v)) return;
+    v = Math.max(tFirst(), Math.min(tLast(), v));
+    if (dragging.which === 'A') cursorA = v; else cursorB = v;
+    paintCursors();
+    recalc();
+  });
+
+  const release = e => {
+    if (!dragging) return;
+    dragging = null;
+    if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  };
+  canvas.addEventListener('pointerup', release);
+  canvas.addEventListener('pointercancel', release);
+}
+
+/* ── toolbar toggles ───────────────────────────────────────────── */
+function toggleZoom(){
+  zoomMode = !zoomMode;
+  const b = $('btnZoom');
+  b.setAttribute('aria-pressed', String(zoomMode));
+  charts.forEach(c => { c.options.plugins.zoom.zoom.drag.enabled = zoomMode; c.update('none'); });
+  $('toolHint').textContent = zoomMode
+    ? 'Drag to zoom · Shift + drag to pan · wheel to zoom'
+    : 'Drag a cursor line to set the window · Shift + drag to pan';
+  charts.forEach(c => { c.canvas.style.cursor = zoomMode ? 'crosshair' : 'default'; });
+}
+
+function toggleFollow(){
+  followLive = !followLive;
+  $('btnFollow').setAttribute('aria-pressed', String(followLive));
+}
+
+function toggleSnap(){
+  snapMode = !snapMode;
+  $('btnSnap').setAttribute('aria-pressed', String(snapMode));
+  if (snapMode) cursorsToView();
+}
+
+/* ── destructive data edits ────────────────────────────────────── */
+function visibleBounds(){
+  return {
+    lo: view.min !== null ? view.min : tFirst(),
+    hi: view.max !== null ? view.max : tLast()
+  };
+}
+
+function rebuild(keep){
+  const t=[], f=[], r=[], p=[];
+  for (let i = 0; i < D.t.length; i++){
+    if (keep(i)){ t.push(D.t[i]); f.push(D.f[i]); r.push(D.r[i]); p.push(D.p[i]); }
+  }
+  D = {t, f, r, p};
+}
+
+function removeVisible(){
+  if (!hasData()) return;
+  const {lo, hi} = visibleBounds();
+  rebuild(i => D.t[i] < lo || D.t[i] > hi);
+  if (!hasData()){ resetData(); return; }
+  view = {min:null, max:null};
+  cursorA = tFirst(); cursorB = tLast();
+  redraw(); recalc();
+}
+
+function decimateVisible(){
+  if (!hasData()) return;
+  const {lo, hi} = visibleBounds();
+  let seen = 0;
+  rebuild(i => {
+    const inside = D.t[i] >= lo && D.t[i] <= hi;
+    if (!inside) return true;
+    return (seen++ % 2) !== 0;
+  });
+  if (!hasData()){ resetData(); return; }
+  cursorA = Math.max(tFirst(), Math.min(tLast(), cursorA));
+  cursorB = Math.max(tFirst(), Math.min(tLast(), cursorB));
+  redraw(); recalc();
+}
+
+/* ═══ PHYSICS ═════════════════════════════════════════════════════ */
+
+/* interpolate the absolute frequency at time t — binary search, so
+   dragging a cursor over a long run stays O(log n) per move */
+function freqAt(t){
+  const n = D.t.length;
+  if (!n) return NaN;
+  if (t <= D.t[0])     return absF(0);
+  if (t >= D.t[n - 1]) return absF(n - 1);
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1){
+    const mid = (lo + hi) >> 1;
+    if (D.t[mid] <= t) lo = mid; else hi = mid;
+  }
+  const t1 = D.t[lo], t2 = D.t[hi];
+  const f1 = absF(lo), f2 = absF(hi);
+  return t2 === t1 ? f1 : f1 + (t - t1) * (f2 - f1) / (t2 - t1);
+}
+
+const blank = () => {
+  $('outRate').textContent = '—';
+  $('outThick').textContent = '—';
+  $('outRange').textContent = '—';
+  $('outDf').textContent = '—';
+  $('outMethod').textContent = '—';
+};
+
+function recalc(){
+  const f0   = detectSignal();
+  const diam = num('pDiam'), rho = num('pRho'), zf = num('pZ');
+
+  // flag bad inputs rather than quietly emitting NaN
+  const ok = v => Number.isFinite(v) && v > 0;
+  [['pF0',f0],['pDiam',diam],['pRho',rho],['pZ',zf]].forEach(([id,v]) => $(id).classList.toggle('bad', !ok(v)));
+
+  $('outInput').textContent = !hasData() ? '—'
+    : signalIsShift ? 'Δf — rebased on f₀' : 'absolute f';
+
+  if (!hasData() || !ok(f0) || !ok(diam) || !ok(rho) || !ok(zf)){ blank(); return; }
+
+  const area  = Math.PI * Math.pow(diam / 20, 2);   // mm Ø → cm radius
+  const fRef  = freqAt(Math.min(cursorA, cursorB));
+  const fEnd  = freqAt(Math.max(cursorA, cursorB));
+  const dt    = Math.abs(cursorB - cursorA);
+
+  if (!Number.isFinite(fRef) || !Number.isFinite(fEnd) || fRef <= 0){ blank(); return; }
+
+  const df    = fEnd - fRef;
+  const ratio = Math.abs(df / fRef);
+
+  let mass, model;
+  if (ratio < SAUERBREY_LIMIT){
+    // Δf = −2 f0² Δm / (A √(ρq μq))  →  signed, so etching reads negative
+    mass  = -df * (Math.sqrt(RHO_Q * MU_Q) / (2 * f0 * f0)) * area;
+    model = 'Sauerbrey';
+  } else if (ratio < ZMATCH_LIMIT){
+    // Z-match: Δm/A = √(ρq μq) / (2π Z f_L) · atan[Z tan(π (f_q − f_L) / f_q)]
+    const k = Math.sqrt(RHO_Q * MU_Q) / (2 * Math.PI * fEnd * zf);
+    mass  = k * Math.atan(zf * Math.tan(Math.PI * (fRef - fEnd) / fRef)) * area;
+    model = 'Z-match';
+  } else {
+    // beyond this the arctan branch wraps and the answer is meaningless
+    $('outRate').textContent = '—';
+    $('outThick').textContent = 'over';
+    $('outRange').textContent = cursorA.toFixed(1) + ' → ' + cursorB.toFixed(1) + ' s';
+    $('outDf').textContent = Math.round(df).toLocaleString('en-US') + ' Hz';
+    $('outMethod').textContent = 'out of range (Δf/f > ' + (ZMATCH_LIMIT * 100) + '%)';
+    return;
+  }
+
+  const thick = (mass / (rho * area)) * 1e7;        // cm → nm
+  const rate  = dt > 0 ? thick / dt : null;
+
+  $('outThick').textContent  = Number.isFinite(thick) ? thick.toFixed(1) : '—';
+  $('outRate').textContent   = rate === null || !Number.isFinite(rate) ? '—' : rate.toFixed(3);
+  $('outRange').textContent  = cursorA.toFixed(1) + ' → ' + cursorB.toFixed(1) + ' s';
+  $('outDf').textContent     = Math.round(df).toLocaleString('en-US') + ' Hz';
+  $('outMethod').textContent = model + ' · Δf/f = ' + (ratio * 100).toFixed(3) + '%';
+}
+
+/* ═══ MATERIAL PRESETS ════════════════════════════════════════════ */
+function applyPreset(){
+  const m = PRESETS[$('pMat').value];
+  if (!m) return;
+  $('pRho').value = m.rho;
+  $('pZ').value   = m.z;
+  recalc();
+}
+function onMatEdit(){          // hand-editing ρ or Z means it is no longer the preset
+  const m = PRESETS[$('pMat').value];
+  if (m && (num('pRho') !== m.rho || num('pZ') !== m.z)) $('pMat').value = 'custom';
+  recalc();
+}
+
+/* ═══ IFF ═════════════════════════════════════════════════════════ */
+function useCurrentRate(){
+  const v = $('outRate').textContent;
+  if (v !== '—') $('iffRef').value = v;
+}
+function calcIFF(){
+  const vTot  = num('iffRef');
+  const vNeut = parseFloat($('outRate').textContent);
+  if (!Number.isFinite(vTot) || vTot === 0 || !Number.isFinite(vNeut)){
+    $('iffOut').textContent = '—';
+    return;
+  }
+  $('iffOut').textContent = ((1 - vNeut / vTot) * 100).toFixed(1) + ' %';
+}
+
+/* ═══ RESIZER ═════════════════════════════════════════════════════ */
+function initResizer(){
+  const g = $('resizer');
+  const move = e => {
+    const w = Math.max(300, Math.min(520, e.clientX));
+    document.body.style.gridTemplateColumns = w + 'px 4px 1fr';
+    charts.forEach(c => c.resize());
+  };
+  const up = e => {
+    g.classList.remove('grabbing');
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    if (g.hasPointerCapture?.(e.pointerId)) g.releasePointerCapture(e.pointerId);
+  };
+  g.addEventListener('pointerdown', e => {
+    g.classList.add('grabbing');
+    g.setPointerCapture(e.pointerId);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    e.preventDefault();
+  });
+}
+
+/* ═══ DROP ZONE ═══════════════════════════════════════════════════ */
+function initDropZone(){
+  let depth = 0;
+  window.addEventListener('dragenter', e => { e.preventDefault(); depth++; document.body.classList.add('dropping'); });
+  window.addEventListener('dragover',  e => { e.preventDefault(); });
+  window.addEventListener('dragleave', e => { e.preventDefault(); if (--depth <= 0){ depth = 0; document.body.classList.remove('dropping'); } });
+
+  window.addEventListener('drop', async e => {
+    e.preventDefault();
+    depth = 0; document.body.classList.remove('dropping');
+
+    const item = e.dataTransfer?.items?.[0];
+    const file = e.dataTransfer?.files?.[0];
+
+    if (item && item.kind === 'file' && typeof item.getAsFileSystemHandle === 'function'){
+      try {
+        const handle = await item.getAsFileSystemHandle();
+        if (handle && handle.kind === 'file'){ startWatching(handle); return; }
+      } catch { /* fall through to a static read */ }
+    }
+    if (file) loadStaticFile(file);
+    else setNote('That drop contained no file.', true);
+  });
+}
+
+/* ═══ PDF ═════════════════════════════════════════════════════════
+   Chart.js canvases are transparent. Composite each one onto white
+   first, otherwise every plot lands in the PDF as a black rectangle. */
+function chartPNG(canvas){
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  const ctx = tmp.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, tmp.width, tmp.height);
+  ctx.drawImage(canvas, 0, 0);
+  return tmp.toDataURL('image/png');            // no quality arg: PNG ignores it
+}
+
+function makePDF(){
+  if (!hasData()) return;
+  const btn = $('btnReport');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+
+  setTimeout(() => {
+    try {
+      const {jsPDF} = window.jspdf;
+      const doc = new jsPDF();
+      const now = new Date();
+      const stamp = now.toISOString().replace('T', '_').replace(/:/g, '-').slice(0, 16);
+
+      doc.setFontSize(20); doc.setTextColor(27, 77, 143);
+      doc.text('QCM deposition report', 15, 20);
+      doc.setFontSize(9); doc.setTextColor(110);
+      doc.text('Source: ' + ($('srcName').textContent || 'n/a'), 15, 27);
+      doc.text('Generated: ' + now.toLocaleString(), 15, 32);
+      doc.text('Tool: ' + window.location.href, 15, 37);
+      doc.setDrawColor(215); doc.line(15, 41, 195, 41);
+
+      doc.setFontSize(12); doc.setTextColor(30);
+      doc.text('Setup', 15, 50);
+      doc.setFontSize(10); doc.setTextColor(60);
+      doc.text('f0: ' + $('pF0').value + ' MHz', 15, 57);
+      doc.text('Diameter: ' + $('pDiam').value + ' mm', 15, 62);
+      doc.text('Material: ' + $('pMat').value, 80, 57);
+      doc.text('Density: ' + $('pRho').value + ' g/cm3', 80, 62);
+      doc.text('Z-factor: ' + $('pZ').value, 145, 57);
+      doc.text('Points: ' + D.t.length, 145, 62);
+
+      doc.setFontSize(12); doc.setTextColor(30);
+      doc.text('Cursor window', 15, 74);
+      doc.setFontSize(10); doc.setTextColor(60);
+      doc.text('Window: ' + $('outRange').textContent, 15, 81);
+      doc.text('Thickness: ' + $('outThick').textContent + ' nm', 15, 86);
+      doc.text('Rate: ' + $('outRate').textContent + ' nm/s', 15, 91);
+      doc.text('Delta f: ' + $('outDf').textContent, 110, 81);
+      doc.text('Model: ' + $('outMethod').textContent, 110, 86);
+      doc.text('Input column: ' + $('outInput').textContent, 110, 91);
+
+      const ref = $('iffRef').value;
+      if (ref){
+        doc.setTextColor(47, 125, 91);
+        doc.text('IFF: ' + $('iffOut').textContent + '  (v_tot = ' + ref + ' nm/s)', 15, 98);
+      }
+
+      let y = 110;
+      doc.setFontSize(11); doc.setTextColor(27, 77, 143);
+      doc.text('Frequency (Hz, offset)', 15, y);
+      doc.addImage(chartPNG(cF.canvas), 'PNG', 15, y + 3, 180, 72);
+
+      y += 84;
+      doc.setTextColor(178, 58, 98);
+      doc.text('Resistance (Ohm)', 15, y);
+      doc.addImage(chartPNG(cR.canvas), 'PNG', 15, y + 3, 86, 50);
+      doc.setTextColor(47, 125, 91);
+      doc.text('Phase angle (deg)', 109, y);
+      doc.addImage(chartPNG(cP.canvas), 'PNG', 109, y + 3, 86, 50);
+
+      doc.save('QCM_report_' + stamp + '.pdf');
+      setNote('Report saved');
+    } catch (err){
+      setNote('Report failed: ' + err.message, true);
+    } finally {
+      btn.textContent = label;
+      btn.disabled = false;
+    }
+  }, 30);
+}
+</script>
+</body>
+</html>
