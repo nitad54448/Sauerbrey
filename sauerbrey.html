@@ -1,1077 +1,1372 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QCM Analyst</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QCM Analyst r4 · 2026-09-11</title>
+<meta name="version" content="r4">
+<meta name="date" content="2026-09-11">
 
-    <style>
-        :root {
-            --bg-app: #0f172a;
-            --panel: #1e293b;
-            --border: #334155;
-            --text-main: #f8fafc;
-            --text-dim: #94a3b8;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --success: #10b981;
-            --warn: #f59e0b;
-            --error: #ef4444;
-            --chart-r: #ec4899;
-            --chart-p: #f59e0b;
-        }
+<!-- ── Libraries ─────────────────────────────────────────────────────
+     Loaded from this folder. 
+       https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js
+       https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js
+       https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js
+       https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js
+       https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
+     ───────────────────────────────────────────────────────────────── -->
+<script src="chart.umd.min.js"></script>
+<script src="hammer.min.js"></script>
+<script src="chartjs-plugin-zoom.min.js"></script>
+<script src="chartjs-plugin-annotation.min.js"></script>
+<script src="jspdf.umd.min.js"></script>
 
-        body {
-            margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg-app); color: var(--text-main); height: 100vh;
-            display: grid; grid-template-columns: 340px 4px 1fr; overflow: hidden;
-        }
+<!-- Webfonts are cosmetic and load without blocking: if there is no
+     network the media stays "print", nothing is applied, and the page
+     falls back to the system stack. Delete these two lines for a
+     strictly offline build. -->
+<link rel="stylesheet" media="print" onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 
-    
-        .sidebar {
-            background: var(--panel); border-right: 1px solid var(--border);
-            display: flex; flex-direction: column; height: 100vh;
-        }
+<style>
+:root{
+  --chassis:#15171b;
+  --chassis-2:#1b1e24;
+  --raised:#23272e;
+  --rule:#2f343c;
+  --txt:#e9e7e2;
+  --txt-dim:#8d939d;
+  --txt-faint:#5b616a;
+  --amber:#f0a22e;
+  --amber-deep:#c07c14;
+  --live:#57c08a;
+  --alert:#e0544b;
 
-        .sb-header { 
-            padding: 15px 20px; 
-            border-bottom: 1px solid var(--border); 
-            background: rgba(0,0,0,0.2); 
-            flex-shrink: 0; 
-            text-align: center; 
-        }
+  --paper:#f4f4f2;
+  --paper-2:#ffffff;
+  --paper-rule:#d9d9d4;
+  --paper-ink:#4a4f57;
 
-        .sb-header h2 { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.5px; }
-        .sb-header small { color: var(--text-dim); font-size: 0.8rem; }
+  --trace-f:#1b4d8f;
+  --trace-r:#b23a62;
+  --trace-p:#2f7d5b;
 
-        /* left part */
-        .sb-content { 
-            flex: 1; 
-            overflow-y: auto; /* Vertical scrollbar only if needed */
-            padding: 20px; 
-            display: flex; flex-direction: column; gap: 20px; 
-        }
+  --f-label:'Barlow Semi Condensed','Arial Narrow',sans-serif;
+  --f-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --f-data:'JetBrains Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+}
 
-        
-        .btn-connect {
-            background: var(--accent); color: white; border: none; padding: 12px; border-radius: 6px; 
-            font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
-            transition: all 0.2s; font-size: 0.9rem; width: 100%; text-align: center;
-            border: 1px solid transparent;
-        }
-        .btn-connect:hover { background: var(--accent-hover); }
-        .btn-connect.active { background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--success); }
-        .btn-connect.error { border-color: var(--error); color: var(--error); }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; overflow:hidden;
+  font-family:var(--f-ui); font-size:14px;
+  background:var(--chassis); color:var(--txt);
+  display:grid; grid-template-columns:340px 4px 1fr;
+}
+:focus-visible{outline:2px solid var(--amber); outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-        /* signale avec une LED l'access */
-        .btn-led { width: 8px; height: 8px; border-radius: 50%; background: white; display: none; box-shadow: 0 0 5px rgba(255,255,255,0.8); }
-        .btn-connect.active .btn-led { display: block; background: var(--success); box-shadow: 0 0 8px var(--success); }
-        .btn-connect.active .btn-led.blink { opacity: 0.3; }
-        .btn-connect.error .btn-led { display: block; background: var(--error); box-shadow: 0 0 8px var(--error); }
+/* ── eyebrow labels: silkscreen on an instrument face ───────────── */
+.eyebrow{
+  font-family:var(--f-label); font-weight:600; font-size:11px;
+  text-transform:uppercase; letter-spacing:.14em; color:var(--txt-faint);
+}
 
-        /* params */
-        .section-title { font-size: 0.7rem; text-transform: uppercase; color: var(--accent); font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-        .input-group label { display: block; font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px; }
-        
-        input, select {
-            width: 100%; background: #334155; border: 1px solid var(--border); color: white;
-            padding: 6px; border-radius: 4px; font-size: 0.9rem; box-sizing: border-box;
-        }
-        input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+/* ── CHASSIS (left) ─────────────────────────────────────────────── */
+.chassis{
+  background:var(--chassis-2); border-right:1px solid var(--rule);
+  display:flex; flex-direction:column; min-height:0;
+}
+.chassis-head{
+  padding:14px 18px 12px; border-bottom:1px solid var(--rule);
+  display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+}
+.chassis-head h1{
+  margin:0; font-family:var(--f-label); font-weight:700; font-size:19px;
+  letter-spacing:.06em; text-transform:uppercase;
+}
+.chassis-head h1 em{font-style:normal; color:var(--amber)}
+.build{font-family:var(--f-data); font-size:10px; color:var(--txt-faint)}
 
-        /* RESULTS BOX */
-        .results-panel {
-            background: rgba(59, 130, 246, 0.08); border: 1px solid var(--border); border-radius: 6px; padding: 15px;
-            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center;
-        }
-        .res-val { font-size: 1.3rem; font-weight: 700; font-family: monospace; margin: 4px 0; }
-        .res-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; }
-        
-        .meta-info { font-size: 0.8rem; font-family: monospace; color: var(--text-dim); margin-top: 10px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; }
-        .meta-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .val-highlight { color: #fff; font-weight: 600; }
+.chassis-body{
+  flex:1; min-height:0; overflow-y:auto; padding:18px;
+  display:flex; flex-direction:column; gap:22px;
+}
+.block{display:flex; flex-direction:column; gap:9px}
+.block-head{display:flex; align-items:center; gap:10px}
+.block-head .eyebrow{white-space:nowrap}
+.block-head .rule{flex:1; height:1px; background:var(--rule)}
 
-        /* IFF SECTION */
-        .iff-section { background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; }
-        .btn-iff { background: transparent; border: 1px solid var(--success); color: var(--success); width: auto; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600; }
-        .btn-iff:hover { background: var(--success); color: white; }
+/* source button */
+.source{
+  width:100%; display:flex; align-items:center; gap:10px;
+  background:var(--raised); color:var(--txt);
+  border:1px solid var(--rule); border-radius:3px;
+  padding:11px 12px; cursor:pointer; text-align:left;
+  font-family:var(--f-ui); font-size:13px; font-weight:500;
+  transition:border-color .15s,background .15s;
+}
+.source:hover{border-color:var(--txt-faint)}
+.source .led{
+  width:7px; height:7px; border-radius:50%; flex:none;
+  background:var(--txt-faint); box-shadow:none; transition:opacity .1s;
+}
+.source .name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.source.live{border-color:rgba(87,192,138,.45)}
+.source.live .led{background:var(--live); box-shadow:0 0 7px var(--live)}
+.source.live .led.pulse{opacity:.25}
+.source.fault{border-color:rgba(224,84,75,.5)}
+.source.fault .led{background:var(--alert); box-shadow:0 0 7px var(--alert)}
+.source-note{font-family:var(--f-data); font-size:10.5px; color:var(--txt-faint); min-height:13px}
+.source-note.fault{color:var(--alert)}
 
-        .sb-footer { padding: 15px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); flex-shrink: 0; }
-        .btn-report { background: #475569; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; }
-        .btn-report:hover { background: #64748b; }
+/* fields */
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+.field label{display:block; font-family:var(--f-label); font-size:11px;
+  text-transform:uppercase; letter-spacing:.1em; color:var(--txt-dim); margin-bottom:4px}
+.field input,.field select{
+  width:100%; background:var(--chassis); color:var(--txt);
+  border:1px solid var(--rule); border-radius:3px; padding:7px 8px;
+  font-family:var(--f-data); font-size:13px;
+}
+.field input:hover,.field select:hover{border-color:var(--txt-faint)}
+.field input:focus,.field select:focus{outline:none; border-color:var(--amber)}
+.field input.bad{border-color:var(--alert)}
 
-        /* --- STAGE & CHARTS --- */
-        .gutter { background: var(--bg-app); cursor: col-resize; transition: background 0.2s; z-index: 50; }
-        .gutter:hover, .gutter.active { background: var(--accent); }
+/* ── SIGNATURE: the readout well ────────────────────────────────── */
+.well{
+  position:relative; border-radius:4px; overflow:hidden;
+  background:#0c0e11; border:1px solid #000;
+  box-shadow:inset 0 2px 10px rgba(0,0,0,.85), 0 1px 0 rgba(255,255,255,.04);
+  padding:14px 16px 12px;
+}
+.well::after{ /* scanlines */
+  content:''; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background:repeating-linear-gradient(to bottom,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);
+}
+.readout-main{display:flex; align-items:flex-end; justify-content:space-between; gap:10px}
+.readout-main .v{
+  font-family:var(--f-data); font-weight:700; font-size:40px; line-height:.95;
+  color:var(--amber); text-shadow:0 0 16px rgba(240,162,46,.35);
+  font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+}
+.readout-main .u{font-family:var(--f-label); font-size:12px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--amber-deep); padding-bottom:5px}
+.readout-sub{
+  display:flex; align-items:baseline; justify-content:space-between;
+  margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.07);
+}
+.readout-sub .v{font-family:var(--f-data); font-weight:500; font-size:19px;
+  color:var(--txt); font-variant-numeric:tabular-nums}
+.readout-sub .u{font-family:var(--f-label); font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--txt-faint)}
 
-        .stage { background: #f1f5f9; padding: 10px; display: flex; flex-direction: column; gap: 10px; height: 100vh; box-sizing: border-box; overflow: hidden; }
-        
-        .chart-container { background: white; border-radius: 6px; border: 1px solid #cbd5e1; padding: 10px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-        .chart-top { flex: 6; }
-        .chart-bot-row { flex: 4; display: flex; gap: 10px; min-height: 0; }
-        .chart-sub { flex: 1; min-width: 0; }
+.meta{margin-top:10px; display:flex; flex-direction:column; gap:5px}
+.meta-row{display:flex; justify-content:space-between; gap:10px;
+  font-family:var(--f-data); font-size:11px; color:var(--txt-faint)}
+.meta-row b{font-weight:500; color:var(--txt-dim)}
+.meta-row b.flag{color:var(--amber)}
 
-        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 0.8rem; font-weight: 700; color: #475569; }
-        .chart-box { flex: 1; position: relative; min-height: 0; width: 100%; cursor: crosshair; }
+/* IFF */
+.iff-row{display:flex; gap:8px; align-items:flex-end}
+.iff-row .field{flex:1}
+.btn-sm{
+  font-family:var(--f-label); font-size:11.5px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase;
+  background:transparent; color:var(--txt-dim);
+  border:1px solid var(--rule); border-radius:3px;
+  padding:7px 10px; cursor:pointer; white-space:nowrap;
+  transition:border-color .15s,color .15s;
+}
+.btn-sm:hover{border-color:var(--txt-dim); color:var(--txt)}
+.iff-out{display:flex; align-items:baseline; justify-content:space-between; margin-top:4px}
+.iff-out .v{font-family:var(--f-data); font-weight:700; font-size:17px; color:var(--live)}
 
-        .header-controls { display: flex; gap: 6px; align-items: center; }
-        .btn-mini { font-size:0.7rem; cursor:pointer; background:#f1f5f9; border:1px solid #cbd5e1; padding:2px 8px; border-radius:4px; transition: all 0.2s; white-space: nowrap; }
-        .btn-mini:hover { background: #e2e8f0; }
-        
-        /* Active Zoom State */
-        .btn-mini.active { background: var(--accent); color: white; border-color: var(--accent); }
+.chassis-foot{padding:14px 18px; border-top:1px solid var(--rule); background:var(--chassis)}
+.btn-report{
+  width:100%; padding:12px; cursor:pointer; border-radius:3px;
+  background:var(--amber); color:#1a1204; border:1px solid var(--amber);
+  font-family:var(--f-label); font-weight:700; font-size:13px;
+  letter-spacing:.12em; text-transform:uppercase;
+  transition:filter .15s;
+}
+.btn-report:hover{filter:brightness(1.08)}
+.btn-report[disabled]{opacity:.35; cursor:not-allowed}
 
-        .overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(255,255,255,0.9); z-index: 10;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #64748b; pointer-events: none;
-        }
+/* ── GUTTER ─────────────────────────────────────────────────────── */
+.gutter{background:var(--chassis); cursor:col-resize; transition:background .15s}
+.gutter:hover,.gutter.grabbing{background:var(--amber)}
 
-        /* Clean Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg-app); }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-        .drag-active { background-color: rgba(59, 130, 246, 0.2) !important; }
+/* ── STAGE (right) ──────────────────────────────────────────────── */
+.stage{
+  background:var(--paper); display:flex; flex-direction:column;
+  min-width:0; min-height:0; overflow:hidden;
+}
 
-    </style>
+.tabs{display:flex; align-items:stretch; gap:0; padding:0 14px;
+  border-bottom:1px solid var(--paper-rule); background:#ececeb; flex:none}
+.tab{
+  position:relative; background:transparent; border:none; cursor:pointer;
+  padding:13px 20px 12px; margin-bottom:-1px;
+  font-family:var(--f-label); font-weight:600; font-size:12.5px;
+  letter-spacing:.13em; text-transform:uppercase; color:#8a8f96;
+  border-bottom:2px solid transparent; transition:color .15s;
+  display:flex; align-items:center; gap:8px;
+}
+.tab:hover{color:var(--paper-ink)}
+.tab[aria-selected="true"]{color:#20242a; border-bottom-color:var(--trace-f)}
+.tab .dot{width:6px; height:6px; border-radius:50%; flex:none}
+.tab-spacer{flex:1}
+.stage-status{display:flex; align-items:center; padding-right:4px;
+  font-family:var(--f-data); font-size:11px; color:#8a8f96}
+
+/* toolbar — identical on both tabs */
+.toolbar{
+  flex:none; display:flex; align-items:center; flex-wrap:wrap; gap:14px;
+  padding:9px 14px; background:var(--paper);
+  border-bottom:1px solid var(--paper-rule);
+}
+.tgroup{display:flex; align-items:center; gap:7px}
+.tgroup > .eyebrow{color:#9aa0a7; font-size:10px}
+.tgroup + .tgroup{padding-left:14px; border-left:1px solid var(--paper-rule)}
+.btn{
+  font-family:var(--f-ui); font-size:12px; font-weight:500;
+  background:var(--paper-2); color:var(--paper-ink);
+  border:1px solid var(--paper-rule); border-radius:3px;
+  padding:5px 10px; cursor:pointer; white-space:nowrap;
+  transition:border-color .15s,background .15s,color .15s;
+}
+.btn:hover{border-color:#a9aeb4}
+.btn[aria-pressed="true"]{background:var(--trace-f); border-color:var(--trace-f); color:#fff}
+.btn.danger:hover{border-color:var(--alert); color:var(--alert)}
+.btn[disabled]{opacity:.4; cursor:not-allowed}
+.hint{font-family:var(--f-data); font-size:10.5px; color:#9aa0a7}
+
+/* plot deck: both panels stay laid out so canvases keep their size
+   (hidden tab still renders → PDF export and tab switches are instant) */
+.deck{position:relative; flex:1; min-height:0; margin:12px 14px 14px}
+.panel{position:absolute; inset:0; display:flex; flex-direction:column; gap:12px;
+  transition:opacity .12s}
+.panel[hidden]{display:flex; visibility:hidden; opacity:0; pointer-events:none}
+.panel.row{flex-direction:row}
+
+.plot{
+  background:var(--paper-2); border:1px solid var(--paper-rule); border-radius:3px;
+  display:flex; flex-direction:column; min-width:0; min-height:0; flex:1;
+  padding:10px 12px 12px; position:relative;
+}
+.plot-head{display:flex; align-items:baseline; justify-content:space-between;
+  gap:10px; margin-bottom:6px; flex:none}
+.plot-title{font-family:var(--f-label); font-weight:700; font-size:12px;
+  letter-spacing:.13em; text-transform:uppercase}
+.plot-sub{font-family:var(--f-data); font-size:10.5px; color:#9aa0a7}
+.canvas-wrap{flex:1; min-height:0; position:relative}
+
+.curtain{
+  position:absolute; inset:0; z-index:5; background:rgba(255,255,255,.94);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:8px; color:#8a8f96; text-align:center; padding:20px; pointer-events:none;
+}
+.curtain strong{font-family:var(--f-label); font-weight:600; font-size:15px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--paper-ink)}
+.curtain span{font-size:12.5px; max-width:320px}
+
+.dropping .deck{outline:2px dashed var(--trace-f); outline-offset:4px}
+
+/* fatal dependency banner */
+.fatal{
+  position:fixed; inset:0; z-index:999; background:var(--chassis);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:12px; padding:40px; text-align:center; overflow:auto;
+}
+.fatal h2{font-family:var(--f-label); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--alert); margin:0}
+.fatal p{max-width:560px; color:var(--txt-dim); line-height:1.6; margin:0}
+.fatal code{font-family:var(--f-data); font-size:12px; color:var(--amber)}
+.fatal-list{list-style:none; margin:4px 0 0; padding:0; max-width:640px;
+  display:flex; flex-direction:column; gap:10px; text-align:left}
+.fatal-list li{background:var(--chassis-2); border:1px solid var(--rule);
+  border-radius:3px; padding:10px 12px}
+.fatal-list span{font-family:var(--f-data); font-size:11px; color:var(--txt-faint); word-break:break-all}
+.fatal-tip{font-size:13px}
+
+::-webkit-scrollbar{width:9px; height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--rule); border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:var(--txt-faint)}
+/* r4: keep controls reachable in narrow windows and enable touch cursors. */
+.source-actions{display:flex;flex-wrap:wrap;gap:8px}
+.build{white-space:nowrap}
+.chassis-head{flex-wrap:wrap}
+.source-note{overflow-wrap:anywhere}
+canvas{touch-action:none}
+@media(max-width:760px){
+  body{display:flex;flex-direction:column;overflow:auto;height:auto;min-height:100%}
+  .chassis{flex:none;max-height:52vh}
+  .gutter{display:none}
+  .stage{min-height:640px;flex:none}
+  .panel.row{flex-direction:column}
+  .stage-status{font-size:9px}
+  .tab{padding:12px}
+  .toolbar{gap:8px}
+  .tgroup{flex-wrap:wrap}
+  .tgroup+.tgroup{padding-left:0;border-left:0}
+}
+</style>
 </head>
 <body>
 
-<div class="sidebar">
-    <div class="sb-header">
-        <h2>QCM Analyst</h2>
-        <small>version 28 feb 2026</small>
+<!-- ═══ CHASSIS ═══════════════════════════════════════════════════ -->
+<aside class="chassis">
+  <div class="chassis-head">
+    <h1>QCM <em>Analyst</em></h1>
+    <span class="build">r4 · 2026-09-11</span>
+  </div>
+
+  <div class="chassis-body">
+
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Source</span><span class="rule"></span></div>
+      <button id="btnSource" class="source" onclick="openFile()">
+        <span id="srcLed" class="led"></span>
+        <span id="srcName" class="name">Open a log file</span>
+      </button>
+      <div id="srcNote" class="source-note" role="status">Or drop a file anywhere on this window.</div>
+      <input type="file" id="snapshotFile" hidden onchange="snapshotSelected(this)">
+      <div class="source-actions">
+        <button class="btn-sm" onclick="openSnapshot()">Open snapshot</button>
+        <button class="btn-sm" id="btnRaw" onclick="exportRaw()" disabled>Export original log</button>
+      </div>
+      <div class="field"><label for="runSelect">Acquisition run</label>
+        <select id="runSelect" onchange="selectRun()" disabled></select></div>
+      <div id="parseNote" class="source-note" aria-live="polite">Format pending</div>
     </div>
 
-    <div class="sb-content">
-        <div>
-            <button id="btnConnect" class="btn-connect" onclick="connectFile()">
-                <div id="btnLed" class="btn-led"></div>
-                <span id="btnText">📂 Open File</span>
-            </button>
-        </div>
-
-        <div>
-            <div class="section-title">Experimental Setup</div>
-            <div class="input-row">
-                <div class="input-group"><label>F₀ (MHz)</label><input type="number" id="pF0" value="6.0" step="0.1" oninput="recalc()"></div>
-                <div class="input-group"><label>Diam (mm)</label><input type="number" id="pDiam" value="10.0" step="0.1" oninput="recalc()"></div>
-            </div>
-            <div class="input-group">
-                <label>Material Preset</label>
-                <select id="pMat" onchange="applyPreset()">
-                    <option value="custom">User Defined</option>
-                    <option value="Au">Gold (Au)</option>
-                    <option value="Ag">Silver (Ag)</option>
-                    <option value="Cr">Chromium (Cr)</option>
-                    <option value="Ti" selected>Titanium (Ti)</option>
-                    <option value="Pt">Platinum (Pt)</option>
-                    <option value="Cu">Copper (Cu)</option>
-                    <option value="Al">Aluminum (Al)</option>
-                    <option value="SiO2">Silica (SiO2)</option>
-                </select>
-            </div>
-            <div class="input-row" style="margin-top:10px;">
-                <div class="input-group"><label>ρ (g/cm³)</label><input type="number" id="pRho" value="4.506" oninput="recalc()"></div>
-                <div class="input-group"><label>Z-Factor</label><input type="number" id="pZ" value="0.628" oninput="recalc()"></div>
-            </div>
-        </div>
-
-        <div>
-            <div class="section-title">Cursor Region Results</div>
-            <div class="results-panel">
-                <div>
-                    <div class="res-label">Thickness</div>
-                    <div id="outThick" class="res-val" style="color:var(--accent);">0.0</div>
-                    <div class="res-label">nanometers</div>
-                </div>
-                <div>
-                    <div class="res-label">Dep. Rate</div>
-                    <div id="outRate" class="res-val" style="color:var(--warn);">0.000</div>
-                    <div class="res-label">nm/sec</div>
-                </div>
-            </div>
-            <div class="meta-info">
-                <div class="meta-row"><span>Range:</span><span id="outRange" class="val-highlight">0 - 0 s</span></div>
-                <div class="meta-row"><span>ΔF Total:</span><span id="outDf" class="val-highlight">0 Hz</span></div>
-                <div class="meta-row"><span>Method:</span><span id="outMethod" class="val-highlight">Sauerbrey</span></div>
-            </div>
-        </div>
-
-        <div class="iff-section">
-            <div class="section-title" style="border:none; color:var(--success);">IFF Calculator</div>
-            <div class="input-group">
-                <label>Reference Rate ($v_{tot}$)</label>
-                <input type="number" id="iffRef" placeholder="Total Rate" style="margin-bottom:6px;">
-            </div>
-            <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
-                <div style="display:flex; gap:5px;">
-                    <button class="btn-iff" onclick="setRefRate()">Set Ref</button>
-                    <button class="btn-iff" onclick="calcIFF()">Calc %</button>
-                </div>
-                <div id="iffOut" style="font-family:monospace; font-weight:bold; color:var(--success);">-- %</div>
-            </div>
-        </div>
-
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Crystal</span><span class="rule"></span></div>
+      <div class="grid2">
+        <div class="field"><label for="pF0">Unloaded f_q (MHz)</label>
+          <input type="number" id="pF0" value="6.0" step="0.1" min="0.1" oninput="recalc()"></div>
+        <div class="field"><label for="pDiam">Ø (mm)</label>
+          <input type="number" id="pDiam" value="10.0" step="0.1" min="0.1" oninput="recalc()"></div>
+      </div>
     </div>
 
-    <div class="sb-footer">
-        <button class="btn-report" onclick="makePDF()">📄 Generate pdf Report</button>
-    </div>
-</div>
-
-<div class="gutter" id="resizer"></div>
-
-<div class="stage">
-    
-    <div class="chart-container chart-top">
-        
-        <div class="chart-header">
-            <span id="labelFreq">FREQUENCY SHIFT (Hz)</span>
-            <div class="header-controls">
-                <button id="btnRemovePoints" class="btn-mini" onclick="removeVisiblePoints()" title="Delete all points in the currently zoomed view">❌ Remove Visible</button>
-                <button id="btnDecimate" class="btn-mini" onclick="decimateVisiblePoints()" title="Reduces data density in the visible area by half">📉 Decimate</button>
-                <button id="btnUpdateRight" class="btn-mini" onclick="toggleUpdateRight()" title="Toggles auto-scrolling to keep incoming live data in view">🔒 Follow Live: OFF</button>
-                <span style="width: 1px; height: 16px; background: #cbd5e1; margin: 0 4px;"></span>
-                <span id="panHint" style="display:none; font-size:0.65rem; color:#94a3b8; align-self:center;">Shift+Drag to pan</span>
-                <button id="btnAutoCursor" class="btn-mini" style="display:none;" onclick="toggleAutoCursor()" title="Auto-snap cursors to the edges of the visible graph">Auto: OFF</button>
-                <button id="btnZoomToggle" class="btn-mini" onclick="toggleZoomMode()" title="Enable mouse drag to zoom and Shift+drag to pan">Zoom: OFF</button>
-                <button class="btn-mini" onclick="resetZoomAll()" title="Restore graphs to show the entire dataset">Reset View</button>
-                <button class="btn-mini" onclick="resetCursors()" title="Snap calculation cursors to the current visible start and end">Reset Cursors</button>
-            </div>
-
-        </div>
-
-        <div class="chart-box">
-            <canvas id="chartF"></canvas>
-            <div id="overlayMsg" class="overlay">
-                <svg width="48" height="48" fill="none" stroke="#cbd5e1" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-                <p style="margin-top:10px; font-weight:600;">Ready to Monitor</p>
-                <small>Drag and drop a file here or Click "Open File" in the sidebar</small>
-            </div>
-        </div>
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Interpretation</span><span class="rule"></span></div>
+      <div class="field"><label for="pSignal">Frequency column</label>
+        <select id="pSignal" onchange="recalc()">
+          <option value="auto">Auto (verify the detected type)</option>
+          <option value="absolute">Absolute frequency (Hz)</option>
+          <option value="shift">Frequency shift Δf (Hz)</option>
+        </select></div>
+      <div class="field"><label for="pShiftBase">Shift zero f (MHz; blank = f_q)</label>
+        <input type="number" id="pShiftBase" step="any" min="0.001" placeholder="Use unloaded f_q" oninput="recalc()"></div>
+      <div class="source-note">Use the measured unloaded frequency for f_q. For Δf logs, shift zero is the absolute frequency at the log’s zero.</div>
+      <div class="field"><label for="pModel">Thickness model</label>
+        <select id="pModel" onchange="recalc()">
+          <option value="auto">Auto (continuous Z-match)</option>
+          <option value="sauerbrey">Sauerbrey (linear)</option>
+          <option value="zmatch">Z-match</option>
+        </select></div>
+      <div id="modelNote" class="source-note" aria-live="polite"></div>
     </div>
 
-    <div class="chart-bot-row">
-        <div class="chart-container chart-sub">
-            <div class="chart-header" style="color:var(--chart-r);">R</div>
-            <div class="chart-box"><canvas id="chartR"></canvas></div>
-        </div>
-        <div class="chart-container chart-sub">
-            <div class="chart-header" style="color:var(--chart-p);">PHASE ANGLE (°)</div>
-            <div class="chart-box"><canvas id="chartP"></canvas></div>
-        </div>
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Film</span><span class="rule"></span></div>
+      <div class="field"><label for="pMat">Material</label>
+        <select id="pMat" onchange="applyPreset()">
+          <option value="custom">Custom</option>
+          <option value="Au">Gold (Au)</option>
+          <option value="Ag">Silver (Ag)</option>
+          <option value="Cr">Chromium (Cr)</option>
+          <option value="Ti" selected>Titanium (Ti)</option>
+          <option value="Pt">Platinum (Pt)</option>
+          <option value="Cu">Copper (Cu)</option>
+          <option value="Al">Aluminium (Al)</option>
+          <option value="SiO2">Silica (SiO₂)</option>
+        </select>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="pRho">ρ (g/cm³)</label>
+          <input type="number" id="pRho" value="4.506" step="0.001" min="0.001" oninput="onMatEdit()"></div>
+        <div class="field"><label for="pZ">Z-factor</label>
+          <input type="number" id="pZ" value="0.628" step="0.001" min="0.001" oninput="onMatEdit()"></div>
+      </div>
     </div>
 
-</div>
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Cursor window</span><span class="rule"></span></div>
+      <div class="well">
+        <div class="readout-main">
+          <span id="outRate" class="v">—</span>
+          <span class="u">nm / s</span>
+        </div>
+        <div class="readout-sub">
+          <span class="u">Thickness</span>
+          <span><span id="outThick" class="v">—</span> <span class="u">nm</span></span>
+        </div>
+      </div>
+      <div class="meta">
+        <div class="meta-row"><span>Window</span><b id="outRange">—</b></div>
+        <div class="meta-row"><span>Δf</span><b id="outDf">—</b></div>
+        <div class="meta-row"><span>Model</span><b id="outMethod">—</b></div>
+        <div class="meta-row"><span>Input column</span><b id="outInput" class="flag">—</b></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><span class="eyebrow">Ionisation efficiency</span><span class="rule"></span></div>
+      <div class="iff-row">
+        <div class="field"><label for="iffRef">Reference rate v_tot (nm/s)</label>
+          <input type="number" id="iffRef" step="any" min="0" placeholder="0.000" oninput="calcIFF()"></div>
+        <button class="btn-sm" onclick="useCurrentRate()" title="Copy the current deposition rate into the reference field">Use</button>
+      </div>
+      <div class="iff-out">
+        <button class="btn-sm" onclick="calcIFF()">Calculate</button>
+        <span id="iffOut" class="v">—</span>
+      </div>
+      <div id="iffNote" class="source-note"></div>
+    </div>
+
+  </div>
+
+  <div class="chassis-foot">
+    <button id="btnReport" class="btn-report" onclick="makePDF()" disabled>Generate report</button>
+  </div>
+</aside>
+
+<div class="gutter" id="resizer" role="separator" aria-orientation="vertical" aria-label="Resize panel" tabindex="0" aria-valuemin="300" aria-valuemax="520" aria-valuenow="340"></div>
+
+<!-- ═══ STAGE ═════════════════════════════════════════════════════ -->
+<main class="stage">
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabFreq" aria-selected="true" aria-controls="panelFreq"
+            onclick="showTab('freq')"><span class="dot" style="background:var(--trace-f)"></span>Frequency</button>
+    <button class="tab" role="tab" id="tabRP" tabindex="-1" aria-selected="false" aria-controls="panelRP"
+            onclick="showTab('rp')">
+      <span class="dot" style="background:var(--trace-r)"></span>
+      <span class="dot" style="background:var(--trace-p); margin-left:-4px"></span>
+      R &amp; Phase</button>
+    <span class="tab-spacer"></span>
+    <span class="stage-status" id="stageStatus">no data</span>
+  </div>
+
+  <!-- one toolbar, same controls whichever tab is open -->
+  <div class="toolbar">
+    <div class="tgroup">
+      <span class="eyebrow">View</span>
+      <button class="btn" id="btnZoom" aria-pressed="false" onclick="toggleZoom()"
+              title="Drag on a plot to zoom into a time span">Box zoom</button>
+      <button class="btn" id="btnFollow" aria-pressed="false" onclick="toggleFollow()"
+              title="Keep the newest data in view as the file grows">Follow live</button>
+      <button class="btn" onclick="resetView()" title="Show the full time span">Fit all</button>
+    </div>
+    <div class="tgroup">
+      <span class="eyebrow">Cursors</span>
+      <button class="btn" id="btnSnap" aria-pressed="false" onclick="toggleSnap()"
+              title="Keep cursors pinned to the edges of the visible span">Snap to view</button>
+      <button class="btn" onclick="cursorsToView()" title="Move both cursors to the edges of the visible span">Reset cursors</button>
+    </div>
+    <div class="tgroup">
+      <span class="eyebrow">Data</span>
+      <button class="btn" onclick="decimateVisible()" title="Keep every second point inside the visible span">Thin ×2</button>
+      <button class="btn danger" onclick="removeVisible()" title="Delete every point inside the visible span">Delete visible</button>
+      <button class="btn" id="btnUndo" onclick="undoEdit()" disabled>Undo edit</button>
+    </div>
+    <span class="hint" id="toolHint">Drag a cursor line to set the window · Shift + drag to pan</span>
+  </div>
+
+  <div class="deck">
+    <!-- Tab 1 -->
+    <section class="panel" id="panelFreq" role="tabpanel" aria-labelledby="tabFreq">
+      <div class="plot">
+        <div class="plot-head">
+          <span class="plot-title" style="color:var(--trace-f)">Frequency</span>
+          <span class="plot-sub" id="subFreq">Hz</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="chartF"></canvas>
+          <div class="curtain" id="curtain">
+            <strong>Ready to monitor</strong>
+            <span>Open a log file, or drop one on this window. New lines are read as they are written.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2 -->
+    <section class="panel row" id="panelRP" role="tabpanel" aria-labelledby="tabRP" hidden>
+      <div class="plot">
+        <div class="plot-head">
+          <span class="plot-title" style="color:var(--trace-r)">Resistance</span>
+          <span class="plot-sub">Ω</span>
+        </div>
+        <div class="canvas-wrap"><canvas id="chartR"></canvas></div>
+      </div>
+      <div class="plot">
+        <div class="plot-head">
+          <span class="plot-title" style="color:var(--trace-p)">Phase angle</span>
+          <span class="plot-sub">degrees</span>
+        </div>
+        <div class="canvas-wrap"><canvas id="chartP"></canvas></div>
+      </div>
+    </section>
+  </div>
+
+</main>
 
 <script>
-    /* --- CONFIGURATION --- */
-    const PRESETS = {
-        'Au': { rho: 19.30, z: 0.381 },
-        'Ag': { rho: 10.50, z: 0.529 },
-        'Cr': { rho: 7.19,  z: 0.305 },
-        'Ti': { rho: 4.506, z: 0.628 },
-        'Pt': { rho: 21.45, z: 0.245 },
-        'Cu': { rho: 8.96,  z: 0.437 },
-        'Al': { rho: 2.70,  z: 1.080 },
-        'SiO2': { rho: 2.20, z: 1.000 }
-    };
-    const CONST = { rho_q: 2.648, mu_q: 2.947e11 };
+"use strict";
 
-    /* --- STATE --- */
-    let fileHandle = null;
-    let pollTimer = null;
-    let fileOffset = 0;
-    let D = { t:[], f:[], r:[], p:[] }; 
-    let baseF = null;
+/* QCM Analyst r4, 2026-09-11.
+   Local dependencies are unchanged. Source data, analysis edits, and results
+   have separate lifetimes. All frequencies are fundamental-mode Hz, time is s.
+   Physics: rigid, uniform, single-material film; no multilayer inversion.
+*/
+const APP_VERSION = 'r4', APP_DATE = '2026-09-11';
+const PRESETS = {
+  Au:{rho:19.30,z:0.381}, Ag:{rho:10.50,z:0.529}, Cr:{rho:7.19,z:0.305},
+  Ti:{rho:4.506,z:0.628}, Pt:{rho:21.45,z:0.245}, Cu:{rho:8.96,z:0.437},
+  Al:{rho:2.70,z:1.080}, SiO2:{rho:2.20,z:1.000}
+};
+const RHO_Q = 2.648, MU_Q = 2.947e11;
+const SAUERBREY_LIMIT = 0.02, ZMATCH_LIMIT = 0.40, POLL_MS = 1000;
+const $ = id => document.getElementById(id);
+const num = id => {
+  const s = $(id).value.trim();
+  return s !== '' && Number.isFinite(Number(s)) ? Number(s) : NaN;
+};
+const positive = v => Number.isFinite(v) && v > 0;
+const emptyData = () => ({t:[], f:[], r:[], p:[], id:[]});
+let D = emptyData(), runs = [], activeRunIndex = -1, nextRowId = 0;
+let source = null, sourceGeneration = 0, selectionRequest = 0, pollTimer = null;
+let carry = '', delimiter = null, physicalLine = 0;
+let sourceAudit = {rejected:0, skipped:0, examples:[]};
+let signalIsShift = false, started = false, frequencyOffset = 0;
+let charts = [], cF, cR, cP, cursorA = 0, cursorB = 0, dragging = null;
+let view = {min:null,max:null}, zoomMode = false, snapMode = false, followLive = false;
+let syncing = false, activeTab = 'freq', cursorWindowValid = true;
+let renderTicket = null, reportBusy = false, result = null, iffResult = null;
+const hasData = () => D.t.length > 0;
+const tFirst = () => D.t[0];
+const tLast = () => D.t[D.t.length - 1];
+const currentRun = () => runs[activeRunIndex];
 
-    let cF, cR, cP; 
-    let cursorStart = 0, cursorEnd = 0, isDragging = null;
+function fmtAxis(v){
+  if (!Number.isFinite(v)) return '—';
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 1e6 || a < 1e-3) return v.toExponential(2);
+  if (a >= 1e4) return Math.round(v).toLocaleString('en-US');
+  return String(Number(v.toPrecision(6)));
+}
 
-    let isZoomMode = false;
-    let isAutoCursor = false;
-    let isFollowingRight = false; // New State for Auto-Scroll
-
-    /* --- DATA MANIPULATION FUNCTIONS --- */
-    function toggleUpdateRight() {
-        isFollowingRight = !isFollowingRight;
-        const btn = document.getElementById('btnUpdateRight');
-        if (isFollowingRight) {
-            btn.innerText = "🔒 Follow Live: ON";
-            btn.classList.add('active');
-        } else {
-            btn.innerText = "🔓 Follow Live: OFF";
-            btn.classList.remove('active');
-        }
+/* File selection: cancellation keeps the current session. A selection token
+   prevents a slow picker or drop resolving over a newer selection. */
+async function openFile(){
+  const request = ++selectionRequest;
+  if (!window.showOpenFilePicker){ $('snapshotFile').click(); return; }
+  try {
+    const [handle] = await window.showOpenFilePicker();
+    if (request === selectionRequest && handle) startWatching(handle);
+  } catch (err){
+    if (request !== selectionRequest || err.name === 'AbortError') return;
+    setNote('File picker failed: ' + err.message + '. Use Open snapshot below.', true);
+  }
+}
+function openSnapshot(){ ++selectionRequest; $('snapshotFile').click(); }
+function snapshotSelected(input){
+  const file = input.files?.[0];
+  if (file) { ++selectionRequest; loadStaticFile(file); }
+  input.value = '';
+}
+function stopWatching(){
+  if (pollTimer !== null) clearInterval(pollTimer);
+  pollTimer = null;
+  ++sourceGeneration;
+  source = null;
+}
+function beginSource(name, handle){
+  stopWatching();
+  source = {generation:sourceGeneration, name, handle, busy:false, offset:0,
+    decoder:new TextDecoder('utf-8'), faults:0, head:'', tail:'', modified:null,
+    rawChunks:[], revisions:[], awaitingRun:true};
+  runs = []; activeRunIndex = -1; nextRowId = 0;
+  carry = ''; delimiter = null; physicalLine = 0;
+  sourceAudit = {rejected:0, skipped:0, examples:[]};
+  D = emptyData(); started = false; result = null; dragging = null;
+  cursorA = cursorB = 0; cursorWindowValid = true;
+  view = {min:null,max:null};
+  $('iffRef').value = '';
+  $('srcName').textContent = name;
+  $('btnSource').classList.remove('fault', 'live');
+  $('btnRaw').disabled = false;
+  updateRuns(); redraw(); recalc();
+  return source;
+}
+function startWatching(handle){
+  const s = beginSource(handle.name, handle);
+  $('btnSource').classList.add('live');
+  setNote('Watching · polling every 1 s');
+  pollTimer = setInterval(() => poll(s), POLL_MS);
+  void poll(s);
+}
+async function loadStaticFile(file){
+  const s = beginSource(file.name, null);
+  setNote('Reading snapshot…');
+  try {
+    const text = await file.text();
+    if (source !== s) return;
+    s.rawChunks.push(text);
+    ingest(text); flushCarry();
+    setNote('Snapshot loaded · use Open to watch a live file');
+  } catch (err){
+    if (source === s) {
+      $('btnSource').classList.add('fault');
+      setNote('Snapshot read failed: ' + err.message, true);
     }
-
-
-    function removeVisiblePoints() {
-        if (D.t.length === 0) return;
-        const min = cF.scales.x.min;
-        const max = cF.scales.x.max;
-        
-        // Reconstruction Method: Safer for syncing multiple arrays
-        const newT = [], newF = [], newR = [], newP = [];
-        
-        for (let i = 0; i < D.t.length; i++) {
-            // Keep points that are OUTSIDE the visible range
-            if (D.t[i] < min || D.t[i] > max) {
-                newT.push(D.t[i]);
-                newF.push(D.f[i]);
-                newR.push(D.r[i]);
-                newP.push(D.p[i]);
-            }
-        }
-
-        // Atomically replace data
-        D.t = newT; D.f = newF; D.r = newR; D.p = newP;
-        
-        updateGraphs();
-
-        // Snap all charts exactly to the remaining data bounds (ignores old cached zoom limits)
-        if(D.t.length > 0) {
-            const startT = D.t[0];
-            const endT = D.t[D.t.length - 1];
-
-            [cF, cR, cP].forEach(c => {
-                c.options.scales.x.min = startT;
-                c.options.scales.x.max = endT;
-                c.update('none');
-            });
-
-            // Reset cursors to cover the new remaining range
-            cursorStart = startT;
-            cursorEnd = endT;
-            cF.options.plugins.annotation.annotations.line1.value = cursorStart;
-            cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
-            cF.update('none');
-        }
-
-        recalc();
+  }
+}
+function setNote(msg, isFault=false){
+  $('srcNote').textContent = msg;
+  $('srcNote').classList.toggle('fault', isFault);
+}
+function archiveRevision(s){
+  s.revisions.push({text:s.rawChunks.join(''), label:'Source revision ' + (s.revisions.length + 1)});
+  s.rawChunks = []; s.offset = 0; s.head = s.tail = '';
+  s.decoder = new TextDecoder('utf-8'); s.awaitingRun = true;
+  // An unfinished old line must never join a new acquisition.
+  carry = ''; delimiter = null; physicalLine = 0;
+}
+async function poll(s=source){
+  if (!s || source !== s || !s.handle || s.busy) return;
+  s.busy = true;
+  try {
+    const file = await s.handle.getFile();
+    if (source !== s) return;
+    let restarted = file.size < s.offset;
+    // Guard append-only acquisition with content samples at both boundaries.
+    // For equal-size modifications compare the entire decoded source as well.
+    if (!restarted && s.offset > 0){
+      const [head, tail] = await Promise.all([
+        file.slice(0, Math.min(1024,s.offset)).text(),
+        file.slice(Math.max(0,s.offset-1024),s.offset).text()
+      ]);
+      if (source !== s) return;
+      restarted = head !== s.head || tail !== s.tail;
+      if (!restarted && file.size === s.offset && file.lastModified !== s.modified){
+        const complete = await file.text();
+        if (source !== s) return;
+        restarted = complete !== s.rawChunks.join('');
+      }
     }
-
-
-
-function resetZoomAll() {
-        if (D.t.length === 0) return;
-
-        const startT = D.t[0];
-        const endT = D.t[D.t.length - 1];
-
-        [cF, cR, cP].forEach(chart => {
-            if (!chart) return;
-            
-            // Clear the plugin's cached state silently
-            chart.resetZoom('none');
-            
-            // Force the X-axis to display the exact current data limits
-            chart.options.scales.x.min = startT;
-            chart.options.scales.x.max = endT;
-            chart.update('none');
-        });
-
-        applyAutoCursors();
+    const from = restarted ? 0 : s.offset;
+    if (file.size > from || restarted){
+      const [bytes, head, tail] = await Promise.all([
+        file.slice(from).arrayBuffer(),
+        file.slice(0,Math.min(1024,file.size)).text(),
+        file.slice(Math.max(0,file.size-1024)).text()
+      ]);
+      if (source !== s) return;
+      if (restarted) archiveRevision(s);
+      const text = s.decoder.decode(bytes,{stream:true});
+      s.rawChunks.push(text);
+      s.offset = file.size; s.head = head; s.tail = tail;
+      ingest(text);
+      $('srcLed').classList.add('pulse');
+      setTimeout(() => { if (source === s) $('srcLed').classList.remove('pulse'); },140);
     }
+    s.modified = file.lastModified; s.faults = 0;
+    $('btnSource').classList.remove('fault');
+    $('btnSource').classList.add('live');
+    setNote(s.awaitingRun && s.revisions.length
+      ? 'File restarted · waiting for data; earlier runs retained'
+      : 'Watching · polling every 1 s' + (s.revisions.length ? ' · earlier revisions retained' : ''));
+  } catch (err){
+    if (source !== s) return;
+    s.faults++;
+    $('btnSource').classList.add('fault');
+    setNote('Read failed (' + s.faults + '): ' + err.message + ' · retrying',true);
+  } finally { s.busy = false; }
+}
 
-
-
-
-
-function decimateVisiblePoints() {
-        if (D.t.length === 0) return;
-        const min = cF.scales.x.min;
-        const max = cF.scales.x.max;
-        
-        // Reconstruction Method
-        const newT = [], newF = [], newR = [], newP = [];
-        let count = 0;
-
-        for (let i = 0; i < D.t.length; i++) {
-            const inRange = D.t[i] >= min && D.t[i] <= max;
-            
-            // If in range, only keep every 2nd point (modulo)
-            // If out of range, keep everything
-            if (!inRange || (count++ % 2 !== 0)) {
-                newT.push(D.t[i]);
-                newF.push(D.f[i]);
-                newR.push(D.r[i]);
-                newP.push(D.p[i]);
-            }
-        }
-
-        D.t = newT; D.f = newF; D.r = newR; D.p = newP;
-        updateGraphs();
-
-        // Lock all charts to the current visible window to prevent empty sub-plots
-        if(D.t.length > 0) {
-            [cF, cR, cP].forEach(c => {
-                c.options.scales.x.min = min;
-                c.options.scales.x.max = max;
-                c.update('none');
-            });
-        }
-
-        recalc();
+/* Strict numeric import. Blank delimited columns keep their positions.
+   A delimiter is latched only after a complete, valid measurement row. */
+const NUMBER_TOKEN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+function splitCols(line, format=delimiter){
+  if (format === 'semicolon') return line.split(';').map(s=>s.trim().replace(',', '.'));
+  if (format === 'tab') return line.split('\t').map(s=>s.trim().replace(',', '.'));
+  if (format === 'csv') return line.split(',').map(s=>s.trim());
+  return line.trim().split(/\s+/).map(s=>s.replace(',', '.'));
+}
+function numericColumns(line, format){
+  const cols = splitCols(line,format);
+  if (cols.length < 4 || !cols.every(s=>NUMBER_TOKEN.test(s) && Number.isFinite(Number(s)))) return null;
+  return cols.map(Number);
+}
+function rejectLine(line, reason){
+  sourceAudit.rejected++;
+  if (sourceAudit.examples.length < 8) sourceAudit.examples.push('Line ' + physicalLine + ': ' + reason + ' — ' + line.slice(0,100));
+}
+function ingest(chunk){
+  const lines = (carry + chunk).split(/\r?\n/);
+  carry = lines.pop();
+  consume(lines);
+}
+function flushCarry(){
+  if (carry.trim()) consume([carry]);
+  carry = '';
+}
+function newRun(reason){
+  const run = {rows:[], hidden:new Set(), undo:[], edits:[], duplicates:0,
+    autoSignal:null, reason, revision:source?.revisions.length || 0};
+  runs.push(run); activeRunIndex = runs.length-1;
+  if (source) source.awaitingRun = false;
+  view = {min:null,max:null}; started = false; dragging = null;
+  cursorWindowValid = true;
+  return run;
+}
+function consume(lines){
+  let added = false;
+  const previousRun = currentRun();
+  const previousEnd = hasData() ? tLast() : null;
+  const atEnd = previousEnd !== null && cursorB === previousEnd;
+  for (const raw of lines){
+    physicalLine++;
+    const line = raw.trim().replace(/^\uFEFF/,'');
+    if (!line || /^(?:#|\/\/|%|;|[A-Za-z])/.test(line)) { sourceAudit.skipped++; continue; }
+    let cols = null;
+    const formats = delimiter ? [delimiter] : line.includes(';') ? ['semicolon']
+      : line.includes('\t') ? ['tab'] : ['csv','whitespace'];
+    for (const format of formats){
+      cols = numericColumns(line,format);
+      if (cols){ delimiter = format; break; }
     }
-
-    function toggleAutoCursor() {
-        isAutoCursor = !isAutoCursor;
-        const btn = document.getElementById('btnAutoCursor');
-        if (isAutoCursor) {
-            btn.innerText = "Auto: ON";
-            btn.classList.add('active');
-            applyAutoCursors();
-        } else {
-            btn.innerText = "Auto: OFF";
-            btn.classList.remove('active');
-        }
+    if (!cols){ rejectLine(line,'invalid or missing numeric field / inconsistent delimiter'); continue; }
+    const [t,f,r,p] = cols;
+    let run = runs[runs.length-1];
+    if (!run || source?.awaitingRun) run = newRun(runs.length ? 'File restart' : 'Initial run');
+    const last = run.rows[run.rows.length-1];
+    // Do not interpolate across a timestamp reset or an out-of-order segment.
+    if (last && t < last.t) run = newRun('Timestamp moved backwards');
+    if (run.rows.length && t === run.rows[run.rows.length-1].t) run.duplicates++;
+    run.rows.push({t,f,r,p,id:nextRowId++});
+    added = true;
+  }
+  if (added){
+    rebuildData();
+    if (!started || previousRun !== currentRun()){
+      started = hasData(); cursorA = hasData()?tFirst():0; cursorB = hasData()?tLast():0;
+      cursorWindowValid = true;
+    } else if (atEnd && hasData()) cursorB = tLast();
+    if (followLive && hasData() && view.min !== null){
+      const width = view.max-view.min;
+      view.max = tLast(); view.min = Math.max(tFirst(),view.max-width);
     }
+    if (snapMode) setCursorsToView();
+    updateRuns(); scheduleRedraw(); recalc();
+  }
+  updateAudit();
+}
+function rebuildData(){
+  D = emptyData();
+  const run = currentRun();
+  if (!run) return;
+  // Latest record wins at duplicate timestamps; all originals remain in rows.
+  for (let i=0;i<run.rows.length;i++){
+    const row=run.rows[i];
+    if (i+1<run.rows.length && row.t === run.rows[i+1].t) continue;
+    if (run.hidden.has(row.id)) continue;
+    D.t.push(row.t); D.f.push(row.f); D.r.push(row.r); D.p.push(row.p); D.id.push(row.id);
+  }
+}
+function updateRuns(){
+  const select = $('runSelect');
+  select.replaceChildren();
+  runs.forEach((run,i)=>{
+    const option=document.createElement('option'); option.value=String(i);
+    option.textContent='Run '+(i+1)+' · '+run.reason+' · '+run.rows.length+' rows';
+    select.appendChild(option);
+  });
+  select.value=String(activeRunIndex); select.disabled=!runs.length;
+  $('btnUndo').disabled=!currentRun()?.undo.length;
+}
+function selectRun(){
+  const i=Number($('runSelect').value);
+  if (!Number.isInteger(i) || !runs[i]) return;
+  activeRunIndex=i; rebuildData();
+  view={min:null,max:null}; started=hasData(); dragging=null;
+  cursorA=hasData()?tFirst():0; cursorB=hasData()?tLast():0; cursorWindowValid=true;
+  updateRuns(); redraw(); recalc();
+}
+function updateAudit(){
+  const duplicates=runs.reduce((n,r)=>n+r.duplicates,0);
+  $('parseNote').textContent=(delimiter || 'Format pending')+' · '+sourceAudit.rejected+
+    ' rejected · '+duplicates+' duplicate timestamps (latest wins)';
+  $('parseNote').title=sourceAudit.examples.join('\n');
+}
+function exportRaw(){
+  if (!source) return;
+  const parts=[];
+  for (const revision of source.revisions) parts.push('# '+revision.label+'\n',revision.text,'\n');
+  parts.push('# Current source revision\n',...source.rawChunks);
+  const url=URL.createObjectURL(new Blob(parts,{type:'text/plain;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url; a.download=source.name+'.preserved.txt'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 
-    function applyAutoCursors() {
-        if (!isAutoCursor || D.t.length === 0) return;
-        cursorStart = Math.max(D.t[0], cF.scales.x.min);
-        cursorEnd = Math.min(D.t[D.t.length-1], cF.scales.x.max);
+const LIBS = [
+  {file:'chart.umd.min.js',                url:'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js',
+   present:() => typeof Chart !== 'undefined'},
+  {file:'hammer.min.js',                   url:'https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js',
+   present:() => typeof Hammer !== 'undefined'},
+  {file:'chartjs-plugin-zoom.min.js',      url:'https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.2.0/chartjs-plugin-zoom.min.js',
+   present:() => hasPlugin('zoom')},
+  {file:'chartjs-plugin-annotation.min.js',url:'https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js',
+   present:() => hasPlugin('annotation')},
+  {file:'jspdf.umd.min.js',                url:'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+   present:() => typeof window.jspdf?.jsPDF === 'function'}
+];
 
-        cF.options.plugins.annotation.annotations.line1.value = cursorStart;
-        cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
-        cF.update('none');
-        recalc();
-    }
+function hasPlugin(id){
+  try { return !!Chart.registry.plugins.get(id); } catch { return false; }
+}
 
-    /* --- INITIALIZATION --- */
-    window.onload = () => {
-        initCharts();
-        setupResizer();
-        setupCursors();
-    };
+window.addEventListener('load', () => {
+  const missing = LIBS.filter(l => { try { return !l.present(); } catch { return true; } });
+  if (missing.length){ showFatal(missing); return; }
 
-    /* --- LIVE FILE ENGINE --- */
-    async function connectFile() {
-        if (!window.showOpenFilePicker) return alert("Browser not supported. Please use Chrome/Edge.");
-        try {
-            [fileHandle] = await window.showOpenFilePicker();
-            resetData();
-            
-            // UI Update: Button becomes the status indicator
-            const btn = document.getElementById('btnConnect');
-            const txt = document.getElementById('btnText');
-            btn.classList.add('active');
-            txt.innerText = fileHandle.name;
-            
-            document.getElementById('overlayMsg').style.display = 'none';
-            
-            if(pollTimer) clearInterval(pollTimer);
-            pollTimer = setInterval(monitorFile, 1000); 
-            monitorFile();
-        } catch (err) { console.log("Cancelled"); }
-    }
+  initCharts();
+  initResizer();
+  initDropZone();
+  charts.forEach(c => attachCursorHandlers(c));
+  document.querySelectorAll('[role="tab"]').forEach(tab => tab.addEventListener('keydown', e => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
+    e.preventDefault();
+    const which = e.key === 'Home' ? 'freq' : e.key === 'End' ? 'rp' : activeTab === 'freq' ? 'rp' : 'freq';
+    showTab(which); $(which === 'freq' ? 'tabFreq' : 'tabRP').focus();
+  }));
+  recalc();
+});
 
-    async function monitorFile() {
-        if (!fileHandle) return;
-        const btn = document.getElementById('btnConnect'); // Get the button
-        const led = document.getElementById('btnLed');
-        
-        try {
-            // 1. Attempt to grab the file handle
-            const file = await fileHandle.getFile();
-            
-            // SUCCESS: Clear the "Red" error state immediately if it exists
-            btn.classList.remove('error'); 
+function showFatal(missing){
+  const rows = missing.map(l =>
+    '<li><code>' + l.file + '</code><br><span>' + l.url + '</span></li>').join('');
+  const el = document.createElement('div');
+  el.className = 'fatal';
+  el.innerHTML =
+    '<h2>' + missing.length + ' librar' + (missing.length === 1 ? 'y is' : 'ies are') + ' missing</h2>' +
+    '<p>Save the file' + (missing.length === 1 ? '' : 's') +
+    ' below into the same folder as this page, keeping the name' +
+    (missing.length === 1 ? '' : 's') + ' unchanged, then reload.</p>' +
+    '<ul class="fatal-list">' + rows + '</ul>' +
+    '<p class="fatal-tip">If the files are already there and this message persists, the browser may be ' +
+    'blocking them. Serve the folder instead: run <code>python -m http.server 8000</code> in it ' +
+    'and open <code>http://localhost:8000/</code>.</p>';
+  document.body.appendChild(el);
+}
 
-            // Case A: Experiment Restarted (File got smaller)
-            if (file.size < fileOffset) { 
-                resetData(); 
-                fileOffset = 0; 
-            }
-            
-            // Case B: New Data Found
-            if (file.size > fileOffset) {
-                led.classList.add('blink'); // Flash White
-                
-                // Read ONLY the new bytes (fast even for huge files)
-                const blob = file.slice(fileOffset, file.size);
-                const text = await blob.text();
-                
-                fileOffset = file.size; // Update pointer
-                parseData(text);
-                
-                // Auto-Scroll Logic: Update Right
-                if (isFollowingRight && D.t.length > 0) {
-                    const latestT = D.t[D.t.length - 1];
-
-                    [cF, cR, cP].forEach(chart => {
-                        // Explicitly lock the currently visible left boundary
-                        if (chart.scales.x.min !== undefined) {
-                            chart.options.scales.x.min = chart.scales.x.min;
-                        }
-                        // Push the right boundary to the newest time point
-                        chart.options.scales.x.max = latestT;
-                        chart.update('none');
-                    });
-                }
-
-
-
-                setTimeout(() => led.classList.remove('blink'), 150);
-            }
-
-        } catch (err) { 
-            // FAILURE: LabVIEW is writing (Lock). Turn Red temporarily.
-            // The next loop (1s later) will clear this if the lock is gone.
-            console.warn("File busy/locked by acquisition software");
-            btn.classList.add('error'); 
-        }
-    }
-
-    function resetData() {
-        D = { t:[], f:[], r:[], p:[] };
-        baseF = null; fileOffset = 0;
-        cursorStart = 0; cursorEnd = 0;
-        [cF, cR, cP].forEach(c => { c.data.labels=[]; c.data.datasets[0].data=[]; c.update(); });
-    }
-
-
-    function parseData(chunk) {
-        const lines = chunk.split('\n');
-        let newPointsCount = 0; // Track valid data added to fix auto-scroll logic
-
-        lines.forEach(line => {
-            // 1. Clean whitespace
-            let rawLine = line.trim();
-            if (!rawLine) return;
-
-            // 2. Filter Non-Data Lines
-            if (/^[\*\-\[a-zA-Z]/.test(rawLine) || rawLine.includes('/')) return;
-
-            // 3. Normalize Decimal Separator
-            const normalizedLine = rawLine.replace(/,/g, '.');
-
-            // 4. Tokenize
-            const cols = normalizedLine.split(/\s+/).filter(x => x !== "");
-
-            // 5. Parse Data
-            if (cols.length >= 4 && !isNaN(parseFloat(cols[0])) && !isNaN(parseFloat(cols[1]))) {
-                const t = parseFloat(cols[0]);
-                const f = parseFloat(cols[1]);
-                
-                D.t.push(t); 
-                D.f.push(f);
-                D.r.push(parseFloat(cols[2])); 
-                D.p.push(parseFloat(cols[3]));
-                
-                newPointsCount++;
-            }
-        });
-
-        if (newPointsCount > 0) {
-            // Initialization for the very first data chunk
-            if (baseF === null) {
-                baseF = D.f[0];
-                cursorStart = D.t[0];
-                cursorEnd = D.t[D.t.length - 1];
-            }
-            
-            // Auto-Scroll Cursor Logic (Separate from Viewport Auto-Scroll)
-            // If cursor was at the previous end (monitoring live), move it to the new end.
-            const prevEndIndex = D.t.length - 1 - newPointsCount;
-            if (prevEndIndex >= 0 && cursorEnd === D.t[prevEndIndex]) {
-                cursorEnd = D.t[D.t.length - 1];
-            }
-
-            updateGraphs();
-            recalc(); // Recalculate only once after processing the chunk
-        }
-    }
-
-
-    function syncCharts({ chart }) {
-        const minX = chart.scales.x.min;
-        const maxX = chart.scales.x.max;
-        [cF, cR, cP].forEach(c => {
-            if (c && c !== chart) {
-                c.options.scales.x.min = minX;
-                c.options.scales.x.max = maxX;
-                c.update('none');
-            }
-        });
-    }
-
-  
-
-
-    function initCharts() {
-        // Base Configuration
-        const getCommonOptions = (color) => ({
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            // Style from image: thicker lines, no points
-elements: { point: { radius: 2, hitRadius: 4 }, line: { borderWidth: 1, tension: 0 } },
-            scales: {
-                x: { 
-                    type: 'linear', 
-                    grid: { display: false }, 
-                    ticks: { color: '#475569', font: { size: 11, weight: '600' }, maxTicksLimit: 8 } 
-                },
-
-                y: { 
-    grid: { color: '#e2e8f0' }, 
-    ticks: { 
-        color: '#475569', 
-        font: { size: 11, weight: '600' },
-        callback: function(value) {
-            if (value === 0) return "0";
-            
-            return Number(value).toExponential(3).toUpperCase();
-        }
-    } 
+/* ═══ TABS ════════════════════════════════════════════════════════ */
+function showTab(which){
+  activeTab = which;
+  const onFreq = which === 'freq';
+  $('panelFreq').hidden = !onFreq;
+  $('panelRP').hidden   =  onFreq;
+  $('tabFreq').setAttribute('aria-selected', String(onFreq));
+  $('tabRP').setAttribute('aria-selected', String(!onFreq));
+  $('tabFreq').tabIndex = onFreq ? 0 : -1;
+  $('tabRP').tabIndex = onFreq ? -1 : 0;
+  requestAnimationFrame(() => charts.forEach(c => c.resize()));
 }
 
 
-            },
-        
-            plugins: {
-                legend: { display: false },
-                zoom: {
-                    limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } },
-                    pan: {
-                        enabled: true,
-                        mode: 'x', // Changed from 'xy' to 'x'
-                        modifierKey: 'shift',
-                        onPan: syncCharts, // Added sync trigger
-                        onPanComplete: applyAutoCursors
-                    },
-                    zoom: {
-                        wheel: { enabled: true },
-                        pinch: { enabled: true },
-                        drag: {
-                            enabled: false,
-                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                            borderColor: '#3b82f6',
-                            borderWidth: 1,
-                            threshold: 10
-                        },
-                        mode: 'x', // Changed from 'xy' to 'x'
-                        onZoom: syncCharts, // Added sync trigger
-                        onZoomComplete: applyAutoCursors
-                    }
-                }
-            }
-
-
-        });
-
-        // Frequency Chart... pas d'echelle X, osef
-        const fOpts = getCommonOptions();
-        fOpts.plugins.annotation = {
-            annotations: {
-                line1: { type: 'line', scaleID: 'x', value: 0, borderColor: '#10b981', borderWidth: 2, label: { display: true, content: 'Start', position: 'start', backgroundColor: '#10b981', font: {weight: 'bold'} } },
-                line2: { type: 'line', scaleID: 'x', value: 0, borderColor: '#ef4444', borderWidth: 2, label: { display: true, content: 'End', position: 'end', backgroundColor: '#ef4444', font: {weight: 'bold'} } }
-            }
-        };
-        
-        cF = new Chart(document.getElementById('chartF'), {
-            type: 'line',
-            data: { datasets: [{ data: [], borderColor: '#3b82f6' }] },
-            options: fOpts
-        });
-
-        // Resistance Chart
-        cR = new Chart(document.getElementById('chartR'), {
-            type: 'line',
-            data: { datasets: [{ data: [], borderColor: '#ec4899' }] },
-            options: getCommonOptions()
-        });
-
-        // Phase Chart
-        cP = new Chart(document.getElementById('chartP'), {
-            type: 'line',
-            data: { datasets: [{ data: [], borderColor: '#f59e0b' }] },
-            options: getCommonOptions()
-        });
-    }
-
-
-    function toggleZoomMode() {
-        isZoomMode = !isZoomMode;
-
-        const btn = document.getElementById('btnZoomToggle');
-        const btnAuto = document.getElementById('btnAutoCursor');
-        const canvas = document.getElementById('chartF');
-        const hint = document.getElementById('panHint');
-
-        if (isZoomMode) {
-            btn.innerText = "Zoom: ON";
-            btn.classList.add('active');
-            canvas.style.cursor = 'crosshair';
-            hint.style.display = 'inline';
-            btnAuto.style.display = 'inline-block';
-        } else {
-            btn.innerText = "Zoom: OFF";
-            btn.classList.remove('active');
-            canvas.style.cursor = 'default';
-            hint.style.display = 'none';
-            btnAuto.style.display = 'none';
-            if (isAutoCursor) toggleAutoCursor();
+function makeOptions(color){
+  return {
+    responsive:true,
+    maintainAspectRatio:false,
+    animation:false,
+    parsing:false,
+    normalized:true,
+    interaction:{mode:'nearest', axis:'x', intersect:false},
+    elements:{
+      // hide markers once the trace is dense — keeps long runs responsive
+      point:{ radius: ctx => (ctx.chart.data.datasets[0].data.length > 1500 ? 0 : 1.8), hitRadius:5 },
+      line:{ borderWidth:1.4, tension:0, borderColor:color }
+    },
+    scales:{
+      x:{ type:'linear',
+          title:{display:true, text:'time (s)', color:'#9aa0a7',
+                 font:{family:"'Barlow Semi Condensed', sans-serif", size:11}},
+          grid:{color:'#f0f0ee'},
+          border:{color:'#d9d9d4'},
+          ticks:{color:'#787e86', maxTicksLimit:9,
+                 font:{family:"'JetBrains Mono', monospace", size:10}} },
+      y:{ grid:{color:'#eeeeec'},
+          border:{color:'#d9d9d4'},
+          ticks:{color:'#787e86', maxTicksLimit:7, callback:fmtAxis,
+                 font:{family:"'JetBrains Mono', monospace", size:10}} }
+    },
+    plugins:{
+      legend:{display:false},
+      decimation:{enabled:true, algorithm:'min-max', threshold:2000},
+      tooltip:{
+        displayColors:false, backgroundColor:'#15171b', padding:8, cornerRadius:3,
+        titleFont:{family:"'JetBrains Mono', monospace", size:11},
+        bodyFont:{family:"'JetBrains Mono', monospace", size:11},
+        callbacks:{ title: it => 't = ' + Number(it[0].parsed.x).toFixed(2) + ' s',
+                    label: it => fmtAxis(it.parsed.y) }
+      },
+      annotation:{
+        annotations:{
+          cursorA:{type:'line', scaleID:'x', value:0, adjustScaleRange:false, display:false, borderColor:'#2f7d5b', borderWidth:1.5,
+                   label:{display:true, content:'A', position:'start', backgroundColor:'#2f7d5b',
+                          font:{family:"'Barlow Semi Condensed', sans-serif", size:11, weight:'700'},
+                          padding:3, yAdjust:0}},
+          cursorB:{type:'line', scaleID:'x', value:0, adjustScaleRange:false, display:false, borderColor:'#b23a62', borderWidth:1.5,
+                   label:{display:true, content:'B', position:'start', backgroundColor:'#b23a62',
+                          font:{family:"'Barlow Semi Condensed', sans-serif", size:11, weight:'700'},
+                          padding:3, yAdjust:0}}
         }
-
-        [cF, cR, cP].forEach(chart => {
-            if (chart && chart.options.plugins.zoom) {
-                chart.options.plugins.zoom.zoom.drag.enabled = isZoomMode;
-                chart.update('none');
-            }
-        });
-    }
-
-
-function updateGraphs() {
-        if (D.t.length === 0) return;
-
-        // 1. Safely find the minimum frequency for potentially large arrays
-        let minF = D.f[0];
-        for (let i = 1; i < D.f.length; i++) {
-            if (D.f[i] < minF) minF = D.f[i];
+      },
+      // NOTE: no `limits:{x:{min:'original'}}` here. The old build captured
+      // "original" while the chart was still empty, which locked pan/zoom to
+      // the 0–1 range forever. The view range is owned by `view` instead.
+      zoom:{
+        pan:{enabled:true, mode:'x', modifierKey:'shift', onPan:onViewChange, onPanComplete:afterViewChange},
+        zoom:{
+          wheel:{enabled:true}, pinch:{enabled:true},
+          drag:{enabled:false, backgroundColor:'rgba(27,77,143,.12)', borderColor:'#1b4d8f', borderWidth:1, threshold:8},
+          mode:'x', onZoom:onViewChange, onZoomComplete:afterViewChange
         }
-
-        // 2. Update the header label with the baseline minimum
-        const lbl = document.getElementById('labelFreq');
-        if (lbl) lbl.innerText = `FREQUENCY (Hz) | Min: ${minF.toFixed(1)} + value`;
-
-        // 3. Map the offset data for the main plot, keep normal mapping for the others
-        const makeXYOffset = (yArr, offset) => D.t.map((t, i) => ({ x: t, y: yArr[i] - offset }));
-        const makeXY = (yArr) => D.t.map((t, i) => ({ x: t, y: yArr[i] }));
-
-        cF.data.datasets[0].data = makeXYOffset(D.f, minF);
-        cR.data.datasets[0].data = makeXY(D.r);
-        cP.data.datasets[0].data = makeXY(D.p);
-
-        // Update cursor lines
-        cF.options.plugins.annotation.annotations.line1.value = cursorStart;
-        cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
-
-        cF.update('none');
-        cR.update('none');
-        cP.update('none');
+      }
     }
+  };
+}
+
+function initCharts(){
+  const mk = (id, color) => new Chart($(id), {
+    type:'line',
+    data:{datasets:[{data:[], borderColor:color, pointBackgroundColor:color, pointBorderColor:color}]},
+    options:makeOptions(color)
+  });
+  const css = getComputedStyle(document.documentElement);
+  cF = mk('chartF', css.getPropertyValue('--trace-f').trim());
+  cR = mk('chartR', css.getPropertyValue('--trace-r').trim());
+  cP = mk('chartP', css.getPropertyValue('--trace-p').trim());
+  charts = [cF, cR, cP];
+}
 
 
-
-    function resetCursors() {
-    if (D.t.length === 0) return;
-    
-    // Get current visible boundaries, fallback to data limits if not zoomed
-    const minX = cF.scales.x.min !== undefined ? cF.scales.x.min : D.t[0];
-    const maxX = cF.scales.x.max !== undefined ? cF.scales.x.max : D.t[D.t.length - 1];
-
-    // Clamp to ensure we don't go out of absolute data bounds
-    cursorStart = Math.max(D.t[0], minX);
-    cursorEnd = Math.min(D.t[D.t.length - 1], maxX);
-
-    // Update lines and recalculate
-    cF.options.plugins.annotation.annotations.line1.value = cursorStart;
-    cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
-    cF.update('none');
-    
+/* Interpretation is anchored to the original first sample of each run, so
+   deletion, thinning, and editing f_q do not silently reclassify the signal. */
+function detectSignal(){
+  const f0=num('pF0')*1e6;
+  const run=currentRun();
+  if (run && run.autoSignal === null && run.rows.length && positive(f0))
+    run.autoSignal=Math.abs(run.rows[0].f)<0.5*f0;
+  const mode=$('pSignal').value;
+  signalIsShift=mode === 'shift' || (mode === 'auto' && !!run?.autoSignal);
+  return f0;
+}
+function shiftBase(){ return $('pShiftBase').value.trim()==='' ? num('pF0')*1e6 : num('pShiftBase')*1e6; }
+const absF=i=>D.f[i]+(signalIsShift ? shiftBase() : 0);
+function scheduleRedraw(){
+  if (renderTicket !== null) return;
+  renderTicket=requestAnimationFrame(()=>{renderTicket=null; redraw();});
+}
+function redraw(){
+  if (renderTicket !== null){ cancelAnimationFrame(renderTicket); renderTicket=null; }
+  $('curtain').style.display=hasData()?'none':'flex';
+  if (!charts.length) return;
+  if (!hasData()){
+    charts.forEach(c=>{
+      c.data.datasets[0].data=[];
+      delete c.options.scales.x.min; delete c.options.scales.x.max;
+    });
+    $('subFreq').textContent='Hz'; $('stageStatus').textContent='no data';
+    paintCursors(); return;
+  }
+  detectSignal();
+  frequencyOffset=D.f.reduce((a,b)=>Math.min(a,b),Infinity);
+  cF.data.datasets[0].data=D.t.map((x,i)=>({x,y:D.f[i]-frequencyOffset}));
+  cR.data.datasets[0].data=D.t.map((x,i)=>({x,y:D.r[i]}));
+  cP.data.datasets[0].data=D.t.map((x,i)=>({x,y:D.p[i]}));
+  $('subFreq').textContent='Hz, offset by '+fmtAxis(frequencyOffset)+' · '+D.t.length.toLocaleString('en-US')+' points';
+  $('stageStatus').textContent='Run '+(activeRunIndex+1)+' · '+D.t.length.toLocaleString('en-US')+' points · '+
+    tFirst().toFixed(1)+'–'+tLast().toFixed(1)+' s';
+  applyView(false); paintCursors();
+}
+function applyView(update=true){
+  if (!hasData()) return;
+  let lo=view.min ?? tFirst(), hi=view.max ?? tLast();
+  if (hi === lo){ lo-=0.5; hi+=0.5; }
+  charts.forEach(c=>{ c.options.scales.x.min=lo; c.options.scales.x.max=hi; });
+  if (update) paintCursors();
+}
+function onViewChange({chart}){
+  if (syncing) return;
+  syncing=true;
+  try {
+    view={min:chart.scales.x.min,max:chart.scales.x.max};
+    if (snapMode) setCursorsToView();
+    charts.forEach(c=>{
+      c.options.scales.x.min=view.min; c.options.scales.x.max=view.max;
+      setAnnotations(c);
+      if (c!==chart || snapMode) c.update('none');
+    });
     recalc();
+  } finally { syncing=false; }
+}
+function afterViewChange(){ if (snapMode) cursorsToView(); }
+function resetView(){
+  view={min:null,max:null};
+  if (snapMode) setCursorsToView();
+  applyView(); recalc();
+}
+function setAnnotations(c){
+  const a=c.options.plugins.annotation.annotations;
+  a.cursorA.value=cursorA; a.cursorB.value=cursorB;
+  a.cursorA.display=a.cursorB.display=hasData() && cursorWindowValid;
+}
+function paintCursors(){ charts.forEach(c=>{setAnnotations(c);c.update('none');}); }
+function setCursorsToView(){
+  if (!hasData()){ cursorWindowValid=false; return; }
+  const lo=Math.max(tFirst(),view.min ?? tFirst());
+  const hi=Math.min(tLast(),view.max ?? tLast());
+  cursorWindowValid=lo<=hi;
+  const clamp=t=>Math.max(tFirst(),Math.min(tLast(),t));
+  cursorA=clamp(lo); cursorB=clamp(hi);
+}
+function cursorsToView(){ setCursorsToView(); paintCursors(); recalc(); }
+function attachCursorHandlers(chart){
+  const canvas=chart.canvas;
+  const valueAt=e=>{
+    const rect=canvas.getBoundingClientRect();
+    return chart.scales.x.getValueForPixel((e.clientX-rect.left)*chart.width/rect.width);
+  };
+  const grab=e=>{
+    if (!cursorWindowValid) return null;
+    const rect=canvas.getBoundingClientRect(), x=(e.clientX-rect.left)*chart.width/rect.width;
+    const a=Math.abs(x-chart.scales.x.getPixelForValue(cursorA));
+    const b=Math.abs(x-chart.scales.x.getPixelForValue(cursorB));
+    return Math.min(a,b)<=12 ? (a<=b?'A':'B') : null;
+  };
+  canvas.addEventListener('pointermove',e=>{
+    if (!zoomMode && !dragging && hasData()) canvas.style.cursor=grab(e)?'ew-resize':'default';
+    if (!dragging || dragging.chart!==chart || dragging.pointerId!==e.pointerId) return;
+    const value=valueAt(e); if (!Number.isFinite(value)) return;
+    const v=Math.max(tFirst(),Math.min(tLast(),value));
+    if (dragging.which==='A') cursorA=v; else cursorB=v;
+    cursorWindowValid=true; scheduleCursorPaint(); recalc();
+  });
+  canvas.addEventListener('pointerdown',e=>{
+    if (zoomMode || e.shiftKey || !hasData() || e.button!==0 || dragging) return;
+    const which=grab(e); if (!which) return;
+    if (snapMode){ snapMode=false; $('btnSnap').setAttribute('aria-pressed','false'); }
+    dragging={which,chart,pointerId:e.pointerId};
+    canvas.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation();
+  });
+  const release=e=>{
+    if (!dragging || dragging.chart!==chart || dragging.pointerId!==e.pointerId) return;
+    dragging=null;
+    if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  };
+  canvas.addEventListener('pointerup',release);
+  canvas.addEventListener('pointercancel',release);
+  canvas.addEventListener('lostpointercapture',release);
+}
+let cursorPaintTicket=null;
+function scheduleCursorPaint(){
+  if (cursorPaintTicket!==null) return;
+  cursorPaintTicket=requestAnimationFrame(()=>{cursorPaintTicket=null;paintCursors();});
+}
+function toggleZoom(){
+  zoomMode=!zoomMode;
+  $('btnZoom').setAttribute('aria-pressed',String(zoomMode));
+  charts.forEach(c=>{
+    c.options.plugins.zoom.zoom.drag.enabled=zoomMode;
+    c.canvas.style.cursor=zoomMode?'crosshair':'default'; c.update('none');
+  });
+  $('toolHint').textContent=zoomMode?'Drag to zoom · Shift + drag to pan · wheel to zoom'
+    :'Drag a cursor line to set the window · Shift + drag to pan';
+}
+function toggleFollow(){ followLive=!followLive; $('btnFollow').setAttribute('aria-pressed',String(followLive)); }
+function toggleSnap(){
+  snapMode=!snapMode; $('btnSnap').setAttribute('aria-pressed',String(snapMode));
+  if (snapMode) cursorsToView();
+}
+function visibleBounds(){ return {lo:view.min ?? tFirst(),hi:view.max ?? tLast()}; }
+function editVisible(thin){
+  const run=currentRun(); if (!hasData() || !run) return;
+  const {lo,hi}=visibleBounds();
+  let seen=0; const ids=[];
+  for (let i=0;i<D.t.length;i++){
+    if (D.t[i]<lo || D.t[i]>hi) continue;
+    if (!thin || (seen++%2)===0) ids.push(D.id[i]);
+  }
+  if (!ids.length) return;
+  const edit={ids,view:{...view},cursorA,cursorB,cursorWindowValid,
+    label:(thin?'Thin x2':'Delete visible')+' ['+lo+', '+hi+'] s; '+ids.length+' points excluded'};
+  run.undo.push(edit); run.edits.push(edit.label);
+  ids.forEach(id=>run.hidden.add(id));
+  rebuildData(); started=hasData();
+  if (!thin) view={min:null,max:null};
+  if (hasData()){
+    cursorA=Math.max(tFirst(),Math.min(tLast(),cursorA));
+    cursorB=Math.max(tFirst(),Math.min(tLast(),cursorB));
+    cursorWindowValid=true;
+    if (snapMode) setCursorsToView();
+  } else {cursorA=cursorB=0;cursorWindowValid=false;}
+  // Source offset, decoder, partial line, and original rows are untouched.
+  updateRuns(); redraw(); recalc();
+}
+function removeVisible(){ editVisible(false); }
+function decimateVisible(){ editVisible(true); }
+function undoEdit(){
+  const run=currentRun(), edit=run?.undo.pop(); if (!edit) return;
+  edit.ids.forEach(id=>run.hidden.delete(id)); run.edits.push('Undo: '+edit.label);
+  view={...edit.view}; cursorA=edit.cursorA; cursorB=edit.cursorB; cursorWindowValid=edit.cursorWindowValid;
+  rebuildData(); started=hasData();
+  if (snapMode) setCursorsToView();
+  updateRuns(); redraw(); recalc();
 }
 
-    function setupCursors() {
-        const canvas = document.getElementById('chartF');
-        
-        // 1. Hover Effect (Only active if Zoom is OFF)
-        canvas.addEventListener('mousemove', (e) => {
-            if (isZoomMode) return; 
-            if (isDragging) return;
+/* Full-precision results are the single source for UI, IFF, and PDF export. */
+function freqAt(t){
+  const n=D.t.length;
+  if (!n || !Number.isFinite(t) || t<tFirst() || t>tLast()) return NaN;
+  if (t===tFirst()) return absF(0);
+  if (t===tLast()) return absF(n-1);
+  let lo=0,hi=n-1;
+  while(hi-lo>1){ const mid=lo+Math.floor((hi-lo)/2); if(D.t[mid]<=t)lo=mid;else hi=mid; }
+  const fraction=(t-D.t[lo])/(D.t[hi]-D.t[lo]);
+  return absF(lo)+fraction*(absF(hi)-absF(lo));
+}
+function cumulativeThickness(f,fq,rho,z){
+  const loading=(fq-f)/fq;
+  if (![f,fq,rho,z].every(positive) || Math.abs(loading)>=ZMATCH_LIMIT) return NaN;
+  return Math.sqrt(RHO_Q*MU_Q)/(2*Math.PI*z*f*rho)*
+    Math.atan(z*Math.tan(Math.PI*loading))*1e7;
+}
+function computeResult(){
+  const fq=detectSignal(), diam=num('pDiam'),rho=num('pRho'),z=num('pZ');
+  for (const [id,v] of [['pF0',fq],['pDiam',diam],['pRho',rho],['pZ',z]])
+    $(id).classList.toggle('bad',!positive(v));
+  const base=shiftBase();
+  $('pShiftBase').classList.toggle('bad',signalIsShift && !positive(base));
+  if (!hasData()) return {valid:false,reason:'No data'};
+  if (![fq,diam,rho,z].every(positive) || (signalIsShift&&!positive(base)))
+    return {valid:false,reason:'Check crystal and material inputs'};
+  if (!cursorWindowValid) return {valid:false,reason:'No data in the visible window'};
+  const ta=Math.min(cursorA,cursorB),tb=Math.max(cursorA,cursorB);
+  const fa=freqAt(ta),fb=freqAt(tb),dt=tb-ta;
+  if (![fa,fb].every(positive)) return {valid:false,reason:'Cursors require valid positive frequencies'};
+  const df=fb-fa, loading=Math.max(Math.abs((fq-fa)/fq),Math.abs((fq-fb)/fq));
+  const choice=$('pModel').value;
+  // Auto always uses the same continuous cumulative Z-match function.
+  // A short cursor interval cannot disguise a heavily loaded crystal.
+  const linear=choice==='sauerbrey';
+  const model=linear?'Sauerbrey':choice==='auto'?'Z-match (Auto)':'Z-match';
+  if (loading>=ZMATCH_LIMIT) return {valid:false,reason:'Outside supported loading range (|f_q − f| / f_q ≥ 40%)'};
+  const thickness=linear ? -df*Math.sqrt(RHO_Q*MU_Q)/(2*fq*fq*rho)*1e7
+    : cumulativeThickness(fb,fq,rho,z)-cumulativeThickness(fa,fq,rho,z);
+  const rate=dt>0?thickness/dt:null;
+  if (!Number.isFinite(thickness) || (rate!==null&&!Number.isFinite(rate)))
+    return {valid:false,reason:'Calculation outside numeric range'};
+  return {valid:true,ta,tb,dt,fa,fb,df,loading,thickness,rate,model,fq,rho,z,diam,shiftBase:base,
+    mass:thickness*1e-7*rho*Math.PI*(diam/20)**2,
+    warning:linear && loading>=SAUERBREY_LIMIT ? 'Linear approximation: loading is at least 2%; consider Z-match' : ''};
+}
+function recalc(){
+  result=computeResult();
+  $('outInput').textContent=!hasData()?'—':(signalIsShift?'Δf + shift baseline':'absolute f')+
+    ($('pSignal').value==='auto'?' (Auto; verify)':'');
+  $('modelNote').textContent=result.warning || (result.valid
+    ? 'Uses a fixed unloaded reference. Assumes a rigid, uniform, single-material film.' : result.reason);
+  if (!result.valid){
+    for(const id of ['outRate','outThick','outRange','outDf','outMethod']) $(id).textContent='—';
+  } else {
+    $('outThick').textContent=result.thickness.toFixed(1);
+    $('outRate').textContent=result.rate===null?'—':result.rate.toFixed(3);
+    $('outRange').textContent=result.ta.toFixed(1)+' → '+result.tb.toFixed(1)+' s';
+    $('outDf').textContent=fmtAxis(result.df)+' Hz';
+    $('outMethod').textContent=result.model+' · load '+(result.loading*100).toFixed(3)+'%';
+  }
+  $('btnReport').disabled=reportBusy || !result.valid || !(result.dt>0);
+  calcIFF();
+}
+function applyPreset(){
+  const m=PRESETS[$('pMat').value]; if(!m)return;
+  $('pRho').value=m.rho; $('pZ').value=m.z; recalc();
+}
+function onMatEdit(){
+  const m=PRESETS[$('pMat').value];
+  if(m && (num('pRho')!==m.rho || num('pZ')!==m.z)) $('pMat').value='custom';
+  recalc();
+}
+function useCurrentRate(){
+  if(result?.valid && Number.isFinite(result.rate)) $('iffRef').value=String(result.rate);
+  calcIFF();
+}
+function calcIFF(){
+  const ref=num('iffRef'),rate=result?.valid?result.rate:null;
+  iffResult=null;
+  if (positive(ref) && Number.isFinite(rate)){
+    const value=(1-rate/ref)*100;
+    if(Number.isFinite(value)) iffResult={reference:ref,rate,percent:value};
+  }
+  $('iffOut').textContent=iffResult?iffResult.percent.toFixed(1)+' %':'—';
+  $('iffNote').textContent=iffResult && (iffResult.percent<0 || iffResult.percent>100)
+    ? 'Outside 0–100%: check reference and measurement conditions.' : '';
+}
 
-            const rect = canvas.getBoundingClientRect();
-            const xVal = cF.scales.x.getValueForPixel(e.clientX - rect.left);
-            const range = cF.scales.x.max - cF.scales.x.min;
-            
-            // Check if near cursor (5% tolerance)
-            const hitStart = Math.abs(xVal - cursorStart) < range * 0.05;
-            const hitEnd = Math.abs(xVal - cursorEnd) < range * 0.05;
+function initResizer(){
+  const g = $('resizer');
+  const move = e => {
+    const w = Math.max(300, Math.min(520, e.clientX));
+    document.body.style.gridTemplateColumns = w + 'px 4px 1fr';
+    g.setAttribute('aria-valuenow', String(w));
+    charts.forEach(c => c.resize());
+  };
+  const up = e => {
+    g.classList.remove('grabbing');
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    window.removeEventListener('pointercancel', up);
+    if (g.hasPointerCapture?.(e.pointerId)) g.releasePointerCapture(e.pointerId);
+  };
+  g.addEventListener('keydown', e => {
+    if (!['ArrowLeft','ArrowRight'].includes(e.key)) return;
+    e.preventDefault();
+    move({clientX: Number(g.getAttribute('aria-valuenow')) + (e.key === 'ArrowLeft' ? -10 : 10)});
+  });
+  g.addEventListener('pointerdown', e => {
+    g.classList.add('grabbing');
+    g.setPointerCapture(e.pointerId);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    e.preventDefault();
+  });
+}
 
-            if (hitStart || hitEnd) {
-                canvas.style.cursor = 'ew-resize';
-            } else {
-                canvas.style.cursor = 'default';
-            }
-        });
-        
-        // 2. Start Dragging (Only active if Zoom is OFF)
-        canvas.addEventListener('mousedown', (e) => {
-            if (isZoomMode) return; // If Zoom is ON, let Chart.js handle it
-            
-            const rect = canvas.getBoundingClientRect();
-            const xVal = cF.scales.x.getValueForPixel(e.clientX - rect.left);
-            const range = cF.scales.x.max - cF.scales.x.min;
-            
-            const hitStart = Math.abs(xVal - cursorStart) < range * 0.05;
-            const hitEnd = Math.abs(xVal - cursorEnd) < range * 0.05;
-            
-            if (hitStart || hitEnd) {
-                isDragging = hitStart ? 'start' : 'end';
-                e.preventDefault(); 
-                e.stopPropagation(); // Stop Chart.js from seeing this click
-            }
-        });
 
-        // 3. Move Logic
-        window.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            
-            e.preventDefault(); 
-            e.stopPropagation();
-            
-            const rect = canvas.getBoundingClientRect();
-            let val = cF.scales.x.getValueForPixel(e.clientX - rect.left);
-            
-            // Clamp to data bounds
-            if (D.t.length) val = Math.max(D.t[0], Math.min(D.t[D.t.length-1], val));
-            
-            if (isDragging === 'start') cursorStart = val; else cursorEnd = val;
-            
-            // Visual Update
-            cF.options.plugins.annotation.annotations.line1.value = cursorStart;
-            cF.options.plugins.annotation.annotations.line2.value = cursorEnd;
-            cF.update('none');
-            recalc();
-        });
-
-        // 4. End Dragging
-        window.addEventListener('mouseup', () => {
-            isDragging = null;
-        });
+function initDropZone(){
+  let depth=0;
+  window.addEventListener('dragenter',e=>{e.preventDefault();depth++;document.body.classList.add('dropping');});
+  window.addEventListener('dragover',e=>e.preventDefault());
+  window.addEventListener('dragleave',e=>{e.preventDefault();if(--depth<=0){depth=0;document.body.classList.remove('dropping');}});
+  window.addEventListener('drop',async e=>{
+    e.preventDefault();depth=0;document.body.classList.remove('dropping');
+    const item=e.dataTransfer?.items?.[0],file=e.dataTransfer?.files?.[0];
+    const request=++selectionRequest;
+    if(item?.kind==='file' && typeof item.getAsFileSystemHandle==='function'){
+      try{
+        const handle=await item.getAsFileSystemHandle();
+        if(request!==selectionRequest)return;
+        if(handle?.kind==='file'){startWatching(handle);return;}
+      }catch(err){if(request!==selectionRequest)return;}
     }
-
-
-    /* Calculs */
-    function getY(t) {
-        if(D.t.length===0) return 0;
-        let i = 0; while(i < D.t.length && D.t[i] < t) i++;
-        if(i===0) return D.f[0];
-        if(i>=D.t.length) return D.f[D.t.length-1];
-        const t1 = D.t[i-1], t2 = D.t[i];
-        const f1 = D.f[i-1], f2 = D.f[i];
-        return f1 + (t-t1)*(f2-f1)/(t2-t1);
-    }
-
-    function recalc() {
-        if (D.t.length === 0) return;
-
-        const f0 = parseFloat(document.getElementById('pF0').value) * 1e6;
-        const diam = parseFloat(document.getElementById('pDiam').value);
-        const rho = parseFloat(document.getElementById('pRho').value);
-        const zfac = parseFloat(document.getElementById('pZ').value);
-        const area = Math.PI * Math.pow((diam/10)/2, 2);
-
-        const fStart = getY(cursorStart);
-        const fEnd = getY(cursorEnd);
-        const dt = cursorEnd - cursorStart;
-
-        // Reference is the frequency at the start cursor (window-based baseline)
-        const fRef = fStart;
-
-        // Computes thickness deposited between fRef and fx
-        const calcThick = (fx, fRef) => {
-            const df = fx - fRef;
-            const ratio = Math.abs(df / fRef);
-            let mass = 0;
-            if (ratio < 0.02) {
-                const C = Math.sqrt(CONST.rho_q * CONST.mu_q) / (2 * f0 * f0);
-                mass = Math.abs(df) * C * area;
-            } else {
-                const t1 = Math.sqrt(CONST.rho_q * CONST.mu_q) / (2 * Math.PI * fx * zfac);
-                const t2 = Math.atan(zfac * Math.tan(Math.PI * (fRef - fx) / fRef));
-                mass = t1 * t2 * area;
-            }
-            return (mass / (rho * area)) * 1e7;
+    if(file)void loadStaticFile(file);else setNote('That drop contained no file.',true);
+  });
+}
+function chartPNG(canvas){
+  if(!canvas.width || !canvas.height)throw new Error('A plot has no renderable size; enlarge the window and retry');
+  const tmp=document.createElement('canvas');tmp.width=canvas.width;tmp.height=canvas.height;
+  const ctx=tmp.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,tmp.width,tmp.height);
+  ctx.drawImage(canvas,0,0);return tmp.toDataURL('image/png');
+}
+function makePDF(){
+  recalc();
+  if(!result?.valid || !(result.dt>0) || reportBusy)return;
+  const btn=$('btnReport'),label=btn.textContent;
+  reportBusy=true;btn.disabled=true;btn.textContent='Generating…';
+  try{
+    // Capture and render synchronously: no delayed callback can mix sessions.
+    redraw();
+    const snapshot={...result},iff=iffResult?{...iffResult}:null,run=currentRun();
+    const now=new Date(),doc=new window.jspdf.jsPDF();
+    const sourceName=source?.name || $('srcName').textContent;
+    const plots=[chartPNG(cF.canvas),chartPNG(cR.canvas),chartPNG(cP.canvas)];
+    let y=18;
+    const ensure=height=>{if(y+height>280){doc.addPage();y=18;}};
+    // Raster text preserves Greek letters, arrows, and Unicode source names
+    // with system fonts, without requiring another external font dependency.
+    const text=(value,size=10,color='#3c3c3c')=>{
+      const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+      const scale=4,mmPerPixel=25.4/72/scale,font=size*scale,maxWidth=180/mmPerPixel;
+      ctx.font=font+'px sans-serif';
+      const lines=[];
+      for(const paragraph of String(value).split('\n')){
+        let line='';
+        for(const char of paragraph){
+          if(line && ctx.measureText(line+char).width>maxWidth){lines.push(line);line='';}
+          line+=char;
         }
-
-        // Thickness deposited within the cursor window
-        const thWindow = calcThick(fEnd, fRef);
-        const rate = dt > 0.5 ? (thWindow / dt) : 0;
-
-        // Method label reflects which branch was used
-        const ratio = Math.abs((fEnd - fRef) / fRef);
-        document.getElementById('outMethod').innerText = ratio < 0.02 ? "Sauerbrey" : "Z-match";
-
-        document.getElementById('outThick').innerText = thWindow.toFixed(1);
-        document.getElementById('outRate').innerText = rate.toFixed(3);
-        document.getElementById('outDf').innerText = (fEnd - fRef).toFixed(0) + " Hz";
-        document.getElementById('outRange').innerText = `${cursorStart.toFixed(0)} - ${cursorEnd.toFixed(0)} s`;
+        lines.push(line);
+      }
+      const lineHeight=font*1.35;
+      for(const line of lines){
+        const height=lineHeight*mmPerPixel;ensure(height);
+        canvas.width=Math.ceil(Math.max(1,Math.min(maxWidth,ctx.measureText(line).width+8)));
+        canvas.height=Math.ceil(lineHeight);
+        const paint=canvas.getContext('2d');paint.fillStyle='#fff';paint.fillRect(0,0,canvas.width,canvas.height);
+        paint.font=font+'px sans-serif';paint.textBaseline='top';paint.fillStyle=color;paint.fillText(line,2,2);
+        doc.addImage(canvas.toDataURL('image/png'),'PNG',15,y,canvas.width*mmPerPixel,canvas.height*mmPerPixel);
+        y+=height;
+        ctx.font=font+'px sans-serif';
+      }
+      y+=1;
+    };
+    const plot=(title,data,height)=>{
+      ensure(height+12);text(title,12,'#1b4d8f');
+      doc.addImage(data,'PNG',15,y,180,height);y+=height+7;
+    };
+    text('QCM deposition report',20,'#1b4d8f');
+    text('QCM Analyst '+APP_VERSION+' · '+APP_DATE+' | Generated '+now.toISOString(),9);
+    text('Source: '+sourceName,9);
+    text('Run '+(activeRunIndex+1)+' of '+runs.length+' · '+run.reason+' · '+(source?.handle?'Live file':'Snapshot'),9);
+    y+=3;text('Setup',12);
+    text('Unloaded f_q: '+(snapshot.fq/1e6)+' MHz · Diameter: '+snapshot.diam+' mm');
+    text('Material: '+$('pMat').value+' · Density: '+snapshot.rho+' g/cm³ · Z-factor: '+snapshot.z);
+    text('Input: '+$('outInput').textContent+(signalIsShift?' · Shift baseline: '+(snapshot.shiftBase/1e6)+' MHz':''));
+    text('Rigid, uniform, single-material film; unloaded reference must match the measured crystal.',9);
+    y+=3;text('Cursor window',12);
+    text('Window: '+snapshot.ta+' → '+snapshot.tb+' s · Δt: '+snapshot.dt+' s');
+    text('Thickness: '+snapshot.thickness.toFixed(3)+' nm · Rate: '+snapshot.rate.toPrecision(8)+' nm/s');
+    text('Δf: '+snapshot.df.toPrecision(10)+' Hz · Model: '+snapshot.model+
+      ' · Maximum endpoint loading: '+(snapshot.loading*100).toFixed(4)+'%');
+    if(snapshot.warning)text(snapshot.warning,9,'#a04422');
+    if(iff)text('IFF: '+iff.percent.toFixed(3)+'% · v_tot: '+iff.reference+' nm/s'+
+      ((iff.percent<0 || iff.percent>100)?' · Outside 0–100%; check conditions':''));
+    plot('Frequency (Hz; subtract raw offset '+frequencyOffset+' Hz)',plots[0],65);
+    plot('Resistance (Ω)',plots[1],58);
+    plot('Phase angle (degrees)',plots[2],58);
+    text('Data provenance',12);
+    text('Analysis points: '+D.t.length+' · Original run rows: '+run.rows.length+
+      ' · Excluded points: '+run.hidden.size+' · Duplicate timestamps: '+run.duplicates,9);
+    text('Delimiter: '+(delimiter || 'pending')+' · Rejected rows across source: '+sourceAudit.rejected+
+      ' · Headers / comments / blank lines: '+sourceAudit.skipped,9);
+    text('Duplicate policy: latest original record at a timestamp wins; all original rows retained.',9);
+    text('Time decreases create separate runs. Live reading expects append-only logs; boundary checks detect common rewrites.',9);
+    if(sourceAudit.examples.length){text('Rejected row examples',10);sourceAudit.examples.forEach(s=>text(s,8));}
+    if(run.edits.length){text('Edit history',10);run.edits.forEach(s=>text(s,8));}
+    doc.setProperties({title:'QCM deposition report',subject:sourceName,creator:'QCM Analyst '+APP_VERSION+' '+APP_DATE});
+    const pages=doc.getNumberOfPages();
+    for(let i=1;i<=pages;i++){
+      doc.setPage(i);doc.setFontSize(8);doc.setTextColor(120);
+      doc.text(APP_VERSION+' '+APP_DATE+' | '+i+' / '+pages,15,290);
     }
+    const stamp=now.toISOString().slice(0,19).replace(/[:T]/g,'-');
+    doc.save('QCM_report_'+APP_VERSION+'_'+stamp+'.pdf');
+    setNote('Report saved');
+  }catch(err){setNote('Report failed: '+err.message,true);}
+  finally{reportBusy=false;btn.textContent=label;recalc();}
+}
 
-    /* --- IFF --- */
-    function setRefRate() { document.getElementById('iffRef').value = document.getElementById('outRate').innerText; }
-    function calcIFF() {
-        const vTot = parseFloat(document.getElementById('iffRef').value);
-        const vNeut = parseFloat(document.getElementById('outRate').innerText);
-        if(!vTot) return;
-        const iff = 1 - (vNeut / vTot);
-        document.getElementById('iffOut').innerText = (iff*100).toFixed(1) + " %";
-    }
-
-    /* ---valuers preset --- */
-    function applyPreset() {
-        const m = PRESETS[document.getElementById('pMat').value];
-        if(m) { 
-            document.getElementById('pRho').value = m.rho; 
-            document.getElementById('pZ').value = m.z; 
-            recalc(); 
-        }
-    }
-
-
-    function setupResizer() {
-        const g = document.getElementById('resizer');
-        let d = false;
-        g.onmousedown = () => { d=true; document.body.style.cursor='col-resize'; };
-        window.onmousemove = (e) => {
-            if(!d) return;
-            const w = Math.max(300, Math.min(500, e.clientX));
-            document.body.style.gridTemplateColumns = `${w}px 4px 1fr`;
-            [cF, cR, cP].forEach(c => c.resize());
-        };
-        window.onmouseup = () => { d=false; document.body.style.cursor='default'; };
-    }
-
-
-    function makePDF() {
-        if (D.t.length === 0) return alert("No data.");
-        
-        // 1. Visual Feedback for the Button
-        const btn = document.querySelector('.btn-report');
-        const origText = btn.innerText;
-        btn.innerText = "⏳ Generating Report...";
-        btn.style.backgroundColor = "var(--success)"; // Turns green
-
-        // 2. Use setTimeout to allow the UI to update the button before the heavy PDF process locks the browser
-        setTimeout(() => {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            
-            const now = new Date();
-            const dateStr = now.toISOString().replace(/T/, '_').replace(/:/g, '-').slice(0, 16);
-            const currentURL = window.location.href; 
-
-            // Header
-            doc.setFontSize(22); doc.setTextColor(59, 130, 246); doc.text("QCM Laboratory Report", 15, 20);
-            doc.setFontSize(10); doc.setTextColor(80);
-            doc.text(`Program URL: ${currentURL}`, 15, 28); 
-            doc.text(`Generated: ${now.toLocaleString()}`, 15, 33);
-            doc.text(`Filename: ${fileHandle ? fileHandle.name : "N/A"}`, 15, 38);
-            doc.line(15, 43, 195, 43);
-
-            // Section 1: Setup & Physics
-            doc.setFontSize(14); doc.setTextColor(0); doc.text("Experimental Parameters", 15, 53);
-            doc.setFontSize(11);
-            doc.text(`Crystal F0: ${document.getElementById('pF0').value} MHz`, 15, 61);
-            doc.text(`Diameter: ${document.getElementById('pDiam').value} mm`, 15, 67);
-            doc.text(`Material: ${document.getElementById('pMat').value}`, 80, 61);
-            doc.text(`Density: ${document.getElementById('pRho').value} g/cm³`, 80, 67);
-            doc.text(`Z-Factor: ${document.getElementById('pZ').value}`, 140, 61);
-            doc.text(`Method: ${document.getElementById('outMethod').innerText}`, 140, 67);
-
-            // Section 2: Cursor Analysis
-            doc.setFontSize(14); doc.text("Analysis Results (Cursor Window)", 15, 80);
-            doc.setFontSize(11);
-            doc.text(`Time Range: ${document.getElementById('outRange').innerText}`, 15, 88);
-            doc.text(`Final Thickness: ${document.getElementById('outThick').innerText} nm`, 15, 94);
-            doc.text(`Deposition Rate: ${document.getElementById('outRate').innerText} nm/s`, 15, 100);
-            doc.text(`Total Freq Shift: ${document.getElementById('outDf').innerText}`, 100, 88);
-            
-            // IFF Section
-            const refRate = document.getElementById('iffRef').value || "N/A";
-            doc.text(`IFF Ref Rate: ${refRate} nm/s`, 100, 94);
-            doc.setTextColor(16, 185, 129); 
-            doc.text(`IFF Result: ${document.getElementById('iffOut').innerText}`, 100, 100);
-            doc.setTextColor(0);
-
-            // Plots
-            let y = 115;
-
-            // Find the Min Frequency again for the PDF label
-            let minF = D.f[0];
-            for (let i = 1; i < D.f.length; i++) {
-                if (D.f[i] < minF) minF = D.f[i];
-            }
-
-            doc.setFontSize(12); doc.setTextColor(59, 130, 246); 
-            doc.text(`Frequency Evolution (Hz) | Min: ${minF.toFixed(1)} + value`, 15, y);
-            const imgF = document.getElementById('chartF').toDataURL('image/png', 2.0);
-            doc.addImage(imgF, 'PNG', 15, y + 2, 180, 70);
-
-            y += 85;
-
-            doc.text('Resistance (Ohm)', 15, y);
-            const imgR = document.getElementById('chartR').toDataURL('image/png', 2.0);
-            doc.addImage(imgR, 'PNG', 15, y + 2, 85, 45);
-
-            doc.text('Phase Angle (Degrees)', 110, y);
-            const imgP = document.getElementById('chartP').toDataURL('image/png', 2.0);
-            doc.addImage(imgP, 'PNG', 110, y + 2, 85, 45);
-
-            doc.save(`QCM_Report_${dateStr}.pdf`);
-
-            // 3. Reset Button State
-            btn.innerText = origText;
-            btn.style.backgroundColor = "";
-        }, 50);
-    }
-
-    //drag and drop a file
-
-    window.addEventListener('dragenter', (e) => {
-        e.preventDefault();
-        document.body.classList.add('drag-active');
-    });
-
-    window.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        document.body.classList.add('drag-active');
-    });
-
-    window.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        if (e.relatedTarget === null || e.relatedTarget.nodeName === 'HTML') {
-            document.body.classList.remove('drag-active');
-        }
-    });
-
-    window.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        document.body.classList.remove('drag-active');
-        if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-            const item = e.dataTransfer.items[0];
-            if (item.kind === 'file') {
-                const handle = await item.getAsFileSystemHandle();
-                if (handle && handle.kind === 'file') {
-                    fileHandle = handle;
-                    resetData();
-
-                    const btn = document.getElementById('btnConnect');
-                    const txt = document.getElementById('btnText');
-                    btn.classList.add('active');
-                    txt.innerText = fileHandle.name;
-                    document.getElementById('overlayMsg').style.display = 'none';
-                    
-                    if(pollTimer) clearInterval(pollTimer);
-                    pollTimer = setInterval(monitorFile, 1000); 
-                    monitorFile();
-                }
-            }
-        }
-    });
 </script>
 </body>
 </html>
