@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TDMS Reader</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+  /* System fallbacks keep this file usable without a network connection. */
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -186,6 +186,21 @@
   }
   .pv-title { color: var(--accent); margin-bottom: 6px; font-weight: 600; border-bottom: 1px solid var(--border2); padding-bottom: 4px; }
   .pv-val { color: var(--muted); }
+  .stat-card .value { overflow-wrap: anywhere; }
+  .channel-item > span:nth-child(2) { overflow-wrap: anywhere; min-width: 0; }
+  .group-label > span { overflow-wrap: anywhere; }
+  #channelPreview { max-width: calc(100vw - 16px); }
+  .pv-title { overflow-wrap: anywhere; }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  @media (max-width: 760px) {
+    header { padding: 12px; gap: 8px; flex-wrap: wrap; }
+    .main { padding: 12px; }
+    .panel-row { grid-template-columns: minmax(0, 1fr); max-height: none; }
+    .panel-row > .panel:first-child { max-height: 260px; }
+    .data-panel { min-height: 420px; max-height: 75vh; }
+    #statusBar { flex-wrap: wrap; }
+    #statsArea { margin-left: 0; gap: 8px; flex-wrap: wrap; }
+  }
 </style>
 </head>
 <body>
@@ -240,639 +255,525 @@
 </div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════════════
-//  TDMS Parser
-//
-//  Key structural insight (validated against real NI files):
-//  The raw data index block (rawIdx bytes) contains:
-//    dtype(4) + arrayDim(4) + numValues(8) [+ totalBytes(8) if string] + numProps(4)
-//  numProps is the LAST field INSIDE the rawIdx block — NOT a separate field after it.
-//  After reading the known fields, numProps is read directly (no skip to idx_start+rawIdx).
-// ═══════════════════════════════════════════════════════════════════════
+'use strict';
 
-const DTYPE_INFO = {
-  1:    { name: 'i8',        size: 1  },
-  2:    { name: 'i16',       size: 2  },
-  3:    { name: 'i32',       size: 4  },
-  4:    { name: 'i64',       size: 8  },
-  5:    { name: 'u8',        size: 1  },
-  6:    { name: 'u16',       size: 2  },
-  7:    { name: 'u32',       size: 4  },
-  8:    { name: 'u64',       size: 8  },
-  9:    { name: 'float32',   size: 4  },
-  10:   { name: 'float64',   size: 8  },
-  11:   { name: 'extended',  size: 10 },
-  0x20: { name: 'string',    size: -1 },
-  0x21: { name: 'boolean',   size: 1  },
-  0x44: { name: 'timestamp', size: 16 },
-};
+// TDMS 1.0/2.0 ordinary scalar channels. Unsupported encodings fail explicitly.
+// Format reference: https://www.ni.com/en/support/documentation/supplemental/07/tdms-file-format-internal-structure.html
+const DTYPE_INFO = Object.freeze({
+  1: { name: 'i8', size: 1 }, 2: { name: 'i16', size: 2 },
+  3: { name: 'i32', size: 4 }, 4: { name: 'i64', size: 8 },
+  5: { name: 'u8', size: 1 }, 6: { name: 'u16', size: 2 },
+  7: { name: 'u32', size: 4 }, 8: { name: 'u64', size: 8 },
+  9: { name: 'float32', size: 4 }, 10: { name: 'float64', size: 8 },
+  0x19: { name: 'float32 (unit)', size: 4 },
+  0x1a: { name: 'float64 (unit)', size: 8 },
+  0x20: { name: 'string', size: -1 },
+  0x21: { name: 'boolean', size: 1 },
+  0x44: { name: 'timestamp', size: 16 }
+});
+
+function splitTDMSPath(path) {
+  if (path === '/') return [];
+  const match = /^\/'((?:[^']|'')*)'(?:\/'((?:[^']|'')*)')?$/.exec(path);
+  if (!match) throw new Error(`Invalid TDMS object path: ${path}`);
+  const parts = [match[1].replace(/''/g, "'")];
+  if (match[2] !== undefined) parts.push(match[2].replace(/''/g, "'"));
+  return parts;
+}
 
 function parseTDMS(buffer) {
-  const u8  = new Uint8Array(buffer);
-  const dv  = new DataView(buffer);
-  const dec = new TextDecoder('utf-8');
-  const objects = {}; // path → { properties, rawDataInfo, values }
-
-  // ── read helpers (little-endian, cursor-based) ──
-  let p = 0;
-  const rdU8   = ()  => u8[p++];
-  const rdU16  = ()  => { const v=dv.getUint16(p,true);  p+=2; return v; };
-  const rdI16  = ()  => { const v=dv.getInt16(p,true);   p+=2; return v; };
-  const rdU32  = ()  => { const v=dv.getUint32(p,true);  p+=4; return v; };
-  const rdI32  = ()  => { const v=dv.getInt32(p,true);   p+=4; return v; };
-  const rdF32  = ()  => { const v=dv.getFloat32(p,true); p+=4; return v; };
-  const rdF64  = ()  => { const v=dv.getFloat64(p,true); p+=8; return v; };
-  const rdU64n = ()  => { const v=Number(dv.getBigUint64(p,true)); p+=8; return v; };
-  const rdStr  = ()  => { const l=rdU32(); const s=dec.decode(u8.subarray(p,p+l)); p+=l; return s; };
-  const rdTS   = ()  => {
-    const secLo=dv.getUint32(p+8,true), secHi=dv.getInt32(p+12,true);
-    p+=16;
-    return new Date((secHi*4294967296+secLo-2082844800)*1000).toISOString();
+  const bytes = new Uint8Array(buffer), view = new DataView(buffer);
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  const objects = Object.create(null);
+  let previous = new Map(), segmentStart = 0, segmentCount = 0;
+  let p = 0, limit = buffer.byteLength, le = true;
+  const fail = message => { throw new Error(`TDMS: ${message}`); };
+  const safe = (value, label) => {
+    if (value > BigInt(Number.MAX_SAFE_INTEGER)) fail(`${label} exceeds the supported size`);
+    return Number(value);
   };
-
-  function rdPropVal(dtype) {
-    switch(dtype) {
-      case 1:    return rdU8() << 0 | 0;  // sign-extend
-      case 2:    return rdI16();
-      case 3:    return rdI32();
-      case 4:    return rdU64n();
-      case 5:    return rdU8();
-      case 6:    return rdU16();
-      case 7:    return rdU32();
-      case 8:    return rdU64n();
-      case 9:    return rdF32();
-      case 10:   return rdF64();
-      case 0x20: return rdStr();
-      case 0x21: return rdU8() !== 0;
-      case 0x44: return rdTS();
-      default:   return `[0x${dtype.toString(16)}]`;
+  const exactInteger = value => value >= BigInt(Number.MIN_SAFE_INTEGER) &&
+    value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value;
+  function need(size) {
+    if (!Number.isSafeInteger(size) || size < 0 || p > limit - size)
+      fail(`unexpected end or invalid length at byte ${p}`);
+  }
+  function u32() { need(4); const value = view.getUint32(p, le); p += 4; return value; }
+  function u64() { need(8); const value = view.getBigUint64(p, le); p += 8; return value; }
+  function text() {
+    const size = u32(); need(size);
+    const value = decoder.decode(bytes.subarray(p, p + size)); p += size;
+    return value.replace(/\0+$/, '');
+  }
+  function typeInfo(dtype) {
+    const info = DTYPE_INFO[dtype];
+    if (!info) fail(`unsupported data type 0x${dtype.toString(16)} (extended, complex and DAQmx data are not supported)`);
+    return info;
+  }
+  function timestamp(pos) {
+    // Little-endian timestamps store fraction first; big-endian stores seconds first.
+    const seconds = view.getBigInt64(pos + (le ? 8 : 0), le);
+    const fraction = view.getBigUint64(pos + (le ? 0 : 8), le);
+    const unixSeconds = seconds - 2082844800n;
+    // A binary fraction has an exact terminating decimal expansion (at most 64 places).
+    const decimal = (fraction * (5n ** 64n)).toString().padStart(64, '0').replace(/0+$/, '').padEnd(3, '0');
+    if (unixSeconds < -8640000000000n || unixSeconds > 8640000000000n)
+      return `${seconds} + ${fraction}/18446744073709551616 seconds since 1904-01-01T00:00:00Z`;
+    return new Date(Number(unixSeconds) * 1000).toISOString().replace(/\.000Z$/, `.${decimal}Z`);
+  }
+  function scalar(dtype) {
+    if (dtype === 0x20) return text();
+    const size = typeInfo(dtype).size;
+    need(size); const pos = p; p += size;
+    switch (dtype) {
+      case 1: return view.getInt8(pos);
+      case 2: return view.getInt16(pos, le);
+      case 3: return view.getInt32(pos, le);
+      case 4: return exactInteger(view.getBigInt64(pos, le));
+      case 5: return view.getUint8(pos);
+      case 6: return view.getUint16(pos, le);
+      case 7: return view.getUint32(pos, le);
+      case 8: return exactInteger(view.getBigUint64(pos, le));
+      case 9: case 0x19: return view.getFloat32(pos, le);
+      case 10: case 0x1a: return view.getFloat64(pos, le);
+      case 0x21: return view.getUint8(pos) !== 0;
+      case 0x44: return timestamp(pos);
+      default: fail(`unsupported scalar type ${dtype}`);
     }
   }
-
-  function rdRawVal(dtype, dpos, le) {
-    switch(dtype) {
-      case 1:    return dv.getInt8(dpos);
-      case 2:    return dv.getInt16(dpos,le);
-      case 3:    return dv.getInt32(dpos,le);
-      case 4:    { const lo=dv.getUint32(dpos,le),hi=dv.getInt32(dpos+4,le); return hi*4294967296+lo; }
-      case 5:    return dv.getUint8(dpos);
-      case 6:    return dv.getUint16(dpos,le);
-      case 7:    return dv.getUint32(dpos,le);
-      case 8:    { const lo=dv.getUint32(dpos,le),hi=dv.getUint32(dpos+4,le); return hi*4294967296+lo; }
-      case 9:    return dv.getFloat32(dpos,le);
-      case 10:   return dv.getFloat64(dpos,le);
-      case 0x21: return dv.getUint8(dpos) !== 0;
-      case 0x44: {
-        const secLo=dv.getUint32(dpos+8,le), secHi=dv.getInt32(dpos+12,le);
-        return new Date((secHi*4294967296+secLo-2082844800)*1000).toISOString();
-      }
-      default: return null;
-    }
-  }
-
-  // ── Segment loop ──
-  let segStart = 0;
-  while (segStart + 28 <= buffer.byteLength) {
-    // Check for 'TDSm' or 'TDSh' (index file) tag
-    const tag0=u8[segStart],tag1=u8[segStart+1],tag2=u8[segStart+2],tag3=u8[segStart+3];
-    const isTDSm = tag0===0x54&&tag1===0x44&&tag2===0x53&&tag3===0x6D;
-    const isTDSh = tag0===0x54&&tag1===0x44&&tag2===0x53&&tag3===0x68;
-    if (!isTDSm && !isTDSh) break;
-
-    const toc        = dv.getUint32(segStart+4, true);
-    const nextSegOff = Number(dv.getBigUint64(segStart+12, true));
-    const rawDataOff = Number(dv.getBigUint64(segStart+20, true));
-
-    const leadInEnd  = segStart + 28;
-    const dataStart  = leadInEnd + rawDataOff;
-    const nextSegPos = nextSegOff === 0xFFFFFFFFFFFFFFFF ? buffer.byteLength : leadInEnd + nextSegOff;
-    const dataEnd    = Math.min(nextSegPos, buffer.byteLength);
-
-    const hasMeta        = (toc & 0x02) !== 0;
-    const hasRaw         = (toc & 0x08) !== 0;
-    const isInterleaved  = (toc & 0x20) !== 0;
-    const isBigEndian    = (toc & 0x40) !== 0;
-    const le             = !isBigEndian;
-
-    const segActiveObjs = []; // ordered list of objects with raw data this segment
-
-    // ── Parse metadata ──
+  if (buffer.byteLength < 28) fail('file is too short to contain a segment');
+  while (segmentStart < buffer.byteLength) {
+    p = segmentStart; limit = buffer.byteLength; need(28);
+    const tag = String.fromCharCode(...bytes.subarray(p, p + 4));
+    if (tag === 'TDSh') fail('this is a TDMS index; open the corresponding .tdms data file');
+    if (tag !== 'TDSm') fail(`invalid segment signature at byte ${segmentStart}`);
+    const toc = view.getUint32(p + 4, true); // ToC is always little-endian.
+    le = (toc & 0x40) === 0;
+    const version = view.getUint32(p + 8, le);
+    if (version !== 4712 && version !== 4713) fail(`unsupported version ${version}`);
+    if (toc & 0x80) fail('DAQmx raw data is not supported; export or convert it to ordinary TDMS channels');
+    if (toc & ~0xee) fail(`unsupported table-of-contents flags 0x${toc.toString(16)}`);
+    const hasMeta = !!(toc & 2), newList = !!(toc & 4), hasRaw = !!(toc & 8);
+    const interleaved = !!(toc & 0x20), leadEnd = segmentStart + 28;
+    const nextOffset = view.getBigUint64(segmentStart + 12, le);
+    const rawOffset = view.getBigUint64(segmentStart + 20, le);
+    const nextBig = nextOffset === 0xffffffffffffffffn ? BigInt(buffer.byteLength) : BigInt(leadEnd) + nextOffset;
+    const dataBig = BigInt(leadEnd) + rawOffset;
+    if (nextBig > BigInt(buffer.byteLength)) fail('truncated segment: declared end is beyond the file');
+    if (dataBig > nextBig) fail('raw data offset is beyond the segment end');
+    const segmentEnd = safe(nextBig, 'Segment end'), dataStart = safe(dataBig, 'Raw data offset');
+    if (newList && !hasMeta) fail('a new object list requires metadata');
+    const active = newList ? new Map() : new Map(previous);
+    p = leadEnd; limit = dataStart;
     if (hasMeta) {
-      p = leadInEnd;
-      const numObjects = rdU32();
-
-      for (let oi = 0; oi < numObjects; oi++) {
-        const path   = rdStr();
-        const rawIdx = rdU32(); // byte length of raw data index block that follows
-
-        if (!objects[path]) objects[path] = { properties:{}, rawDataInfo:null, values:[] };
-
-        let ri = objects[path].rawDataInfo; // carry forward by default
-
-        if (rawIdx === 0xFFFFFFFF) {
-          // No raw data for this object in this segment
-          ri = null;
-          // Still need to read numProps (it comes right after rawIdx when no index block)
-          const numProps = rdU32();
-          for (let pi=0; pi<numProps; pi++) {
-            const pname = rdStr();
-            const ptype = rdU32();
-            const pval  = rdPropVal(ptype);
-            objects[path].properties[pname] = { value: pval, type: DTYPE_INFO[ptype]?.name || `0x${ptype.toString(16)}` };
-          }
-          objects[path].rawDataInfo = null;
-          continue; // don't add to segActiveObjs
+      const count = u32(), seen = new Set();
+      if (count > Math.floor((limit - p) / 8)) fail('invalid metadata object count');
+      for (let i = 0; i < count; i++) {
+        const path = text(), parts = splitTDMSPath(path);
+        if (seen.has(path)) fail(`duplicate object in segment: ${path}`);
+        seen.add(path);
+        const obj = objects[path] || (objects[path] = { properties: Object.create(null), rawDataInfo: null, values: [] });
+        const indexStart = p, indexLength = u32();
+        let ri = obj.rawDataInfo, hasData = false;
+        if (indexLength === 0xffffffff) {
+          // Absence in this segment does not erase the last known channel index.
+        } else if (indexLength === 0) {
+          if (!ri) fail(`no previous raw data index for ${path}`);
+          hasData = true;
+        } else {
+          if (indexLength === 0x1269 || indexLength === 0x1369) fail('DAQmx raw data indexes are not supported');
+          if (indexLength !== 20 && indexLength !== 28) fail(`unsupported raw data index length ${indexLength}`);
+          need(indexLength - 4);
+          const dtype = u32(), dimension = u32(), nvals = safe(u64(), 'Sample count');
+          const info = typeInfo(dtype);
+          if (dimension !== 1) fail(`unsupported array dimension ${dimension}`);
+          const totalBytes = dtype === 0x20 ? safe(u64(), 'String data size') : 0;
+          // Index length includes its own u32; the property count is outside it.
+          if (p !== indexStart + indexLength) fail('raw data index length does not match its data type');
+          const byteSize = dtype === 0x20 ? totalBytes : nvals * info.size;
+          if (!Number.isSafeInteger(byteSize)) fail('channel byte size exceeds the supported size');
+          if (dtype === 0x20 && (totalBytes < nvals * 4 || (nvals === 0 && totalBytes !== 0))) fail('invalid string data size');
+          if (ri && ri.dtype !== dtype) fail(`channel data type changed for ${path}`);
+          ri = { dtype, nvals, totalBytes, byteSize };
+          obj.rawDataInfo = ri; hasData = true;
         }
-
-        if (rawIdx === 0x00000000) {
-          // Same raw data layout as previous segment — ri unchanged, no index to read
-          // numProps follows immediately
-          const numProps = rdU32();
-          for (let pi=0; pi<numProps; pi++) {
-            const pname = rdStr();
-            const ptype = rdU32();
-            const pval  = rdPropVal(ptype);
-            objects[path].properties[pname] = { value: pval, type: DTYPE_INFO[ptype]?.name || `0x${ptype.toString(16)}` };
-          }
-          if (ri) segActiveObjs.push({ path, ri });
-          continue;
-        }
-
-        // New raw data index: read fields directly (numProps is the LAST field inside rawIdx)
-        const dtype = rdU32();
-        const dim   = rdU32(); // always 1
-        const nvals = rdU64n();
-        let totalBytes = 0;
-        if (dtype === 0x20) totalBytes = rdU64n(); // string type: total byte count
-
-        // numProps is the last u32 inside the rawIdx block
-        const numProps = rdU32();
-
-        ri = { dtype, nvals, totalBytes };
-        objects[path].rawDataInfo = ri;
-        segActiveObjs.push({ path, ri });
-
-        // Properties follow immediately after rawIdx block
-        for (let pi=0; pi<numProps; pi++) {
-          const pname = rdStr();
-          const ptype = rdU32();
-          const pval  = rdPropVal(ptype);
-          objects[path].properties[pname] = { value: pval, type: DTYPE_INFO[ptype]?.name || `0x${ptype.toString(16)}` };
+        if (hasData && parts.length !== 2) fail(`raw data assigned to a non-channel object: ${path}`);
+        active.set(path, { path, ri, hasData });
+        const numProperties = u32();
+        if (numProperties > Math.floor((limit - p) / 8)) fail('invalid property count');
+        for (let j = 0; j < numProperties; j++) {
+          const name = text(), dtype = u32();
+          typeInfo(dtype);
+          obj.properties[name] = { value: scalar(dtype), type: DTYPE_INFO[dtype].name };
         }
       }
     }
-
-    // ── Parse raw data ──
-    if (hasRaw && segActiveObjs.length > 0) {
-      if (!isInterleaved) {
-        // Contiguous layout: all values of obj0, then obj1, …
-        let dpos = dataStart;
-        for (const { path, ri } of segActiveObjs) {
-          const { dtype, nvals, totalBytes } = ri;
-
-          if (dtype === 0x20) {
-            // String: [nvals × u32 end-offsets] then [raw string bytes]
-            const strDataStart = dpos + nvals * 4;
-            let prev = 0;
-            for (let i=0; i<nvals; i++) {
-              const endOff = dv.getUint32(dpos + i*4, true);
-              objects[path].values.push(dec.decode(u8.subarray(strDataStart+prev, strDataStart+endOff)));
-              prev = endOff;
-            }
-            dpos += totalBytes;
-          } else {
-            const sz = DTYPE_INFO[dtype]?.size;
-            if (!sz || sz <= 0) continue;
-            for (let i=0; i<nvals; i++) {
-              if (dpos + sz > dataEnd) break;
-              const v = rdRawVal(dtype, dpos, le);
-              if (v !== null) objects[path].values.push(v);
-              dpos += sz;
-            }
-          }
-        }
+    if (p !== dataStart) fail('metadata length does not match the raw data offset');
+    previous = active;
+    p = dataStart; limit = segmentEnd;
+    if (!hasRaw && p !== limit) fail('segment contains bytes without the raw-data flag');
+    if (hasRaw && p < limit) {
+      const channels = [...active.values()].filter(entry => entry.hasData && entry.ri.nvals > 0);
+      const chunkSize = channels.reduce((sum, entry) => sum + entry.ri.byteSize, 0);
+      if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) fail('raw data has no usable channel index');
+      if ((limit - p) % chunkSize !== 0) fail('incomplete raw data chunk; file may be truncated');
+      if (interleaved) {
+        if (channels.some(entry => entry.ri.dtype === 0x20)) fail('interleaved string channels are not supported');
+        if (channels.some(entry => entry.ri.nvals !== channels[0].ri.nvals)) fail('interleaved channels have unequal sample counts');
+        while (p < limit) for (const entry of channels) objects[entry.path].values.push(scalar(entry.ri.dtype));
       } else {
-        // Interleaved: one sample of each object per cycle
-        const cycleSize = segActiveObjs.reduce((acc, {ri}) => {
-          const sz = DTYPE_INFO[ri.dtype]?.size || 0;
-          return acc + Math.max(sz, 0);
-        }, 0);
-        if (cycleSize > 0) {
-          let dpos = dataStart;
-          while (dpos + cycleSize <= dataEnd) {
-            for (const { path, ri } of segActiveObjs) {
-              const sz = DTYPE_INFO[ri.dtype]?.size;
-              if (!sz || sz <= 0) continue;
-              const v = rdRawVal(ri.dtype, dpos, le);
-              if (v !== null) objects[path].values.push(v);
-              dpos += sz;
+        // Every segment may contain multiple repetitions of the complete channel chunk.
+        while (p < limit) {
+          for (const { path, ri } of channels) {
+            const values = objects[path].values;
+            if (ri.dtype === 0x20) {
+              need(ri.totalBytes);
+              const base = p, stringStart = base + ri.nvals * 4, stringBytes = ri.totalBytes - ri.nvals * 4;
+              let previousOffset = 0;
+              for (let i = 0; i < ri.nvals; i++) {
+                const end = view.getUint32(base + i * 4, le);
+                if (end < previousOffset || end > stringBytes) fail(`invalid string offset for ${path}`);
+                values.push(decoder.decode(bytes.subarray(stringStart + previousOffset, stringStart + end)));
+                previousOffset = end;
+              }
+              if (previousOffset !== stringBytes) fail(`string data size mismatch for ${path}`);
+              p = base + ri.totalBytes;
+            } else {
+              for (let i = 0; i < ri.nvals; i++) values.push(scalar(ri.dtype));
             }
           }
         }
       }
     }
-
-    segStart = nextSegPos;
-    if (segStart >= buffer.byteLength) break;
+    segmentStart = segmentEnd; segmentCount++;
   }
-
+  if (!segmentCount || !Object.keys(objects).length) fail('file contains no TDMS objects');
   return objects;
 }
 
-// ── Group/channel structure ──
-// TDMS paths look like: /  /'groupName'  /'groupName'/'channelName'
+// Key groups by their TDMS path so a real group named "(root)" stays separate.
 function parsePaths(objects) {
-  const groups = {};
-  groupCreationOrder = [];
+  const groups = Object.create(null);
   for (const [path, obj] of Object.entries(objects)) {
-    const m = path.match(/^\/'([^']+)'(?:\/'([^']+)')?$|^\/$/);
-    if (!m) continue;
-    const gName = m[1] || '(root)', cName = m[2] || null;
-    if (!groups[gName]) { groups[gName] = { groupObj:null, channels:{} }; groupCreationOrder.push(gName); }
-    if (cName) groups[gName].channels[cName] = { path, obj };
-    else groups[gName].groupObj = obj;
+    const parts = splitTDMSPath(path);
+    const key = parts.length ? `/\'${parts[0].replace(/'/g, "''")}\'` : '/';
+    const g = groups[key] || (groups[key] = {
+      path: key, name: parts.length ? parts[0] : '(root)',
+      groupObj: null, channels: Object.create(null), channelOrder: []
+    });
+    if (parts.length === 2) {
+      g.channels[parts[1]] = { path, obj };
+      g.channelOrder.push(parts[1]);
+    } else g.groupObj = obj;
   }
   return groups;
 }
 
-
-//  UI
-let parsedGroups = {};
-let groupCreationOrder = []; // insertion order from the file
-let currentSort = 'name'; // 'name' | 'creation'
-
+let parsedGroups = Object.create(null), currentSort = 'name', selection = null;
+let loadedFilename = '', loadGeneration = 0, parsingWorker = null, exportBusy = false;
+const checkedGroups = new Set(), expandedGroups = new Set(), statisticsCache = new WeakMap();
+const $ = id => document.getElementById(id);
+function esc(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function showStatus(message, subMessage = '', state = 'ok', stats = null) {
+  $('statusBar').style.display = 'flex';
+  $('statusDot').className = 'dot ' + state;
+  $('statusText').textContent = message;
+  $('statusSubText').textContent = subMessage;
+  $('statsArea').innerHTML = stats ? stats.map(s => `<span style="color:var(--muted)">${esc(s.label)}:&nbsp;</span><span>${esc(s.val)}</span>`).join('') : '';
+}
 function toggleSort() {
   currentSort = currentSort === 'name' ? 'creation' : 'name';
-  document.getElementById('sortToggle').textContent = currentSort === 'name' ? 'A→Z' : '#';
-  document.getElementById('sortToggle').title = currentSort === 'name' ? 'Sort: alphabetical' : 'Sort: creation order';
+  $('sortToggle').textContent = currentSort === 'name' ? 'A→Z' : '#';
+  $('sortToggle').title = currentSort === 'name' ? 'Sort: alphabetical' : 'Sort: creation order';
   buildTree(parsedGroups);
 }
-
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function activateTab(name) {
+  document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.toggle('active', tab.id === 'tab-' + name));
 }
-
-
-function showStatus(msg, subMsg='', state='ok', stats=null) {
-  document.getElementById('statusBar').style.display = 'flex';
-  document.getElementById('statusDot').className = 'dot '+state;
-  document.getElementById('statusText').textContent = msg;
-  document.getElementById('statusSubText').textContent = subMsg;
-  const sa = document.getElementById('statsArea');
-  sa.innerHTML = stats ? stats.map(s=>`<span style="color:var(--muted)">${s.label}:&nbsp;</span><span>${s.val}</span>`).join('') : '';
-}
-
-function buildTree(groups) {
-  const container = document.getElementById('treeContainer');
-  container.innerHTML = '';
-  
-  let gNames;
-  if (currentSort === 'name') {
-    gNames = Object.keys(groups).sort((a, b) => {
-      if (a === '(root)') return -1;
-      if (b === '(root)') return 1;
-      return a.localeCompare(b);
-    });
-  } else {
-    // creation order: use groupCreationOrder, filter to only existing keys
-    gNames = groupCreationOrder.filter(n => n in groups);
-    // put (root) first if present
-    if (gNames.includes('(root)')) {
-      gNames = ['(root)', ...gNames.filter(n => n !== '(root)')];
+function numericStatistics(values) {
+  if (statisticsCache.has(values)) return statisticsCache.get(values);
+  let count = 0, min = Infinity, max = -Infinity, scale = 0, excluded = 0;
+  let integerMin = null, integerMax = null, containsBigInt = false;
+  for (const value of values) {
+    if (typeof value === 'bigint') containsBigInt = true;
+    if (typeof value !== 'number' || !Number.isFinite(value)) { excluded++; continue; }
+    count++; min = Math.min(min, value); max = Math.max(max, value); scale = Math.max(scale, Math.abs(value));
+  }
+  // Exact 64-bit extrema; don't quietly approximate mean/std-dev for unsafe integers.
+  if (containsBigInt) {
+    for (const value of values) {
+      if (typeof value !== 'bigint' && !(typeof value === 'number' && Number.isSafeInteger(value))) continue;
+      const integer = BigInt(value);
+      if (integerMin === null || integer < integerMin) integerMin = integer;
+      if (integerMax === null || integer > integerMax) integerMax = integer;
     }
+    const result = { count: 0, integerMin, integerMax, containsBigInt: true, excluded };
+    statisticsCache.set(values, result); return result;
   }
-
-  document.getElementById('groupCount').textContent = gNames.length+' group'+(gNames.length!==1?'s':'');
-
-  for (const gName of gNames) {
-    const g = groups[gName];
-    const cNames = Object.keys(g.channels);
-    const node  = document.createElement('div'); node.className='group-node';
-    const label = document.createElement('div'); label.className='group-label';
-
-
-label.innerHTML = `<span class="arrow">▶</span><input type="checkbox" class="group-export-cb" value="${esc(gName)}" onclick="event.stopPropagation()" style="margin-right: 6px; cursor: pointer;"><span class="g-icon">▤</span>${esc(gName)}<span class="ch-count">${cNames.length} ch</span>`;
-    
-    const chList = document.createElement('div'); chList.className='channels-list';
-  
-label.addEventListener('click', (e)=>{ 
-      // Do nothing if clicking the export checkbox
-      if (e.target.type === 'checkbox') return; 
-
-      label.classList.toggle('open'); 
-      chList.classList.toggle('open'); 
-      
-      // Push the group object to the property viewer
-      const gObj = g.groupObj || { properties: {}, values: [] };
-      selectChannel(`/'${gName}'`, gName, '— (Group Properties) —', gObj);
-    });
-
-
-    for (const cName of cNames) {
-      const ch  = g.channels[cName];
-      const dt  = DTYPE_INFO[ch.obj.rawDataInfo?.dtype]?.name||'—';
-      const item = document.createElement('div');
-      item.className='channel-item'; item.dataset.path=ch.path;
-      item.innerHTML=`<span class="c-dot"></span>${esc(cName)}<span class="dtype">${dt}</span>`;
-      item.addEventListener('click', ()=>selectChannel(ch.path, gName, cName, ch.obj));
-
-item.addEventListener('mouseenter', (e) => {
-//rajout des variable de nr de points, Xpixels, Ypixels
-  const POINTS = 800;
-  const PIXELS_X = 260;
-  const PIXELS_Y = 120;
-  // 
-
-  const pv = document.getElementById('channelPreview');
-  //pv.style.maxWidth = 'none';
-  //annule la taille, si définie dans le CSS... 
-  const numVals = (ch.obj.values || []).filter(v => typeof v === 'number');
-
-  if (numVals.length === 0) {
-    pv.innerHTML = `<div class="pv-title">${esc(cName)}</div><div class="pv-val">No numeric data</div>`;
-  } else {
-    pv.innerHTML = `<div class="pv-title">${esc(cName)}</div><canvas id="pvCanvas" width="${PIXELS_X}" height="${PIXELS_Y}" style="margin-top:4px;"></canvas>`;
-    const ctx = document.getElementById('pvCanvas').getContext('2d');
-    
-    // Decimate 
-    const step = Math.max(1, Math.floor(numVals.length / POINTS));
-    const plotData = numVals.filter((_, i) => i % step === 0);
-    
-    const min = Math.min(...plotData);
-    const max = Math.max(...plotData);
-    const range = (max - min) || 1;
-    
-    // 2px padding 
-    const padding = 2;
-    const plotHeight = PIXELS_Y - (padding * 2);
-
-    ctx.strokeStyle = '#2563eb';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    plotData.forEach((val, i) => {
-      const x = (i / (plotData.length - 1 || 1)) * PIXELS_X;
-      const y = PIXELS_Y - ((val - min) / range) * plotHeight - padding; 
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
+  // Normalize first to avoid overflowing sums and squared deviations for large floats.
+  let normalizedMean = 0, m2 = 0, n = 0;
+  if (scale) for (const value of values) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    n++; const delta = value / scale - normalizedMean;
+    normalizedMean += delta / n;
+    m2 += delta * (value / scale - normalizedMean);
   }
-  
-  pv.style.display = 'block';
-  pv.style.left = (e.clientX + 15) + 'px';
-  pv.style.top = (e.clientY + 15) + 'px';
-});
-
-item.addEventListener('mousemove', (e) => {
-  const pv = document.getElementById('channelPreview');
-  pv.style.left = (e.clientX + 15) + 'px';
-  pv.style.top = (e.clientY + 15) + 'px';
-});
-item.addEventListener('mouseleave', () => {
-  document.getElementById('channelPreview').style.display = 'none';
-});
-
-
-      chList.appendChild(item);
-    }
-    node.appendChild(label); node.appendChild(chList); container.appendChild(node);
-  }
-
-  // Auto-open first group, select first channel
-  const firstG = gNames[0];
-  if (firstG) {
-    container.querySelector('.group-label')?.classList.add('open');
-    container.querySelector('.channels-list')?.classList.add('open');
-    const firstCh = Object.entries(groups[firstG].channels)[0];
-    if (firstCh) selectChannel(firstCh[1].path, firstG, firstCh[0], firstCh[1].obj);
-  }
+  const result = { count, min, max, mean: normalizedMean * scale,
+    std: count && scale ? Math.sqrt(Math.max(0, m2 / count)) * scale : 0, excluded, containsBigInt: false };
+  statisticsCache.set(values, result); return result;
 }
-
-function selectChannel(path, gName, cName, obj) {
-  document.querySelectorAll('.channel-item').forEach(el=>el.classList.remove('active'));
-  document.querySelector(`.channel-item[data-path="${CSS.escape(path)}"]`)?.classList.add('active');
-
-  const values = obj.values||[];
-  const props  = obj.properties||{};
-  const ri     = obj.rawDataInfo;
-  const dtype  = DTYPE_INFO[ri?.dtype]?.name||'—';
-  const MAX    = 10000;
-
-  // Values tab
-  const valTab = document.getElementById('tab-values');
-  if (values.length===0) {
-    valTab.innerHTML='<div class="empty-state"><span class="big">∅</span>No raw data in this channel</div>';
-  } else {
-    const shown = values.slice(0,MAX);
-    let html='<div class="values-wrap"><table class="values-table"><thead><tr><th>#</th><th>Value</th></tr></thead><tbody>';
-    for (let i=0;i<shown.length;i++) {
-      const v=shown[i];
-      const cls=typeof v==='number'?'num':'str';
-      const d=typeof v==='number'?(Number.isInteger(v)?v:+v.toPrecision(12)):v;
-      html+=`<tr><td>${i}</td><td class="${cls}">${esc(String(d))}</td></tr>`;
-    }
-    html+='</tbody></table></div>';
-    if (values.length>MAX) html+=`<div class="truncate-note">Showing ${MAX.toLocaleString()} of ${values.length.toLocaleString()} values</div>`;
-    valTab.innerHTML=html;
-  }
-
-  // Props tab
-  const propsTab = document.getElementById('tab-props');
-  const pKeys = Object.keys(props);
-  if (pKeys.length===0) {
-    propsTab.innerHTML='<div class="empty-state"><span class="big">∅</span>No properties</div>';
-  } else {
-    let html='<table class="props-table"><thead><tr><th>Property</th><th>Value</th><th>Type</th></tr></thead><tbody>';
-    for (const k of pKeys)
-      html+=`<tr><td class="key">${esc(k)}</td><td class="val">${esc(String(props[k].value))}</td><td class="tcell">${esc(props[k].type)}</td></tr>`;
-    propsTab.innerHTML=html+'</tbody></table>';
-  }
-
-  // Info tab
-  const infoTab = document.getElementById('tab-info');
-  const numVals = values.filter(v=>typeof v==='number');
-  const hasStats= numVals.length>0;
-  const minV    = hasStats?Math.min(...numVals):null;
-  const maxV    = hasStats?Math.max(...numVals):null;
-  const meanV   = hasStats?numVals.reduce((a,b)=>a+b,0)/numVals.length:null;
-  const stdV    = hasStats?Math.sqrt(numVals.reduce((a,b)=>a+(b-meanV)**2,0)/numVals.length):null;
-
-  infoTab.innerHTML=`
-    <div class="stats-grid">
-      <div class="stat-card"><div class="label">Samples</div><div class="value">${values.length.toLocaleString()}</div></div>
-      <div class="stat-card"><div class="label">Data Type</div><div class="value blue">${dtype}</div></div>
-      <div class="stat-card"><div class="label">Group</div><div class="value white">${esc(gName)}</div></div>
-      <div class="stat-card"><div class="label">Properties</div><div class="value">${pKeys.length}</div></div>
-      ${hasStats?`
-      <div class="stat-card"><div class="label">Min</div><div class="value blue">${minV.toPrecision(7)}</div></div>
-      <div class="stat-card"><div class="label">Max</div><div class="value blue">${maxV.toPrecision(7)}</div></div>
-      <div class="stat-card"><div class="label">Mean</div><div class="value">${meanV.toPrecision(8)}</div></div>
-      <div class="stat-card"><div class="label">Std Dev</div><div class="value">${stdV.toPrecision(6)}</div></div>`:''}
-    </div>
-    <table class="props-table"><thead><tr><th>Field</th><th>Detail</th></tr></thead><tbody>
-      <tr><td class="key">path</td><td class="val">${esc(path)}</td></tr>
-      <tr><td class="key">channel</td><td class="val">${esc(cName)}</td></tr>
-      <tr><td class="key">group</td><td class="val">${esc(gName)}</td></tr>
-    </tbody></table>`;
+function positionPreview(event) {
+  const preview = $('channelPreview');
+  preview.style.left = Math.max(4, Math.min(event.clientX + 15, innerWidth - preview.offsetWidth - 8)) + 'px';
+  preview.style.top = Math.max(4, Math.min(event.clientY + 15, innerHeight - preview.offsetHeight - 8)) + 'px';
 }
-
-//séparateur ; ou , suivant le système 
-async function exportCSV() {
-  const columns = [];
-  const checkedBoxes = Array.from(document.querySelectorAll('.group-export-cb:checked')).map(cb => cb.value);
-  const exportAll = checkedBoxes.length === 0;
-
-  for (const [gName, g] of Object.entries(parsedGroups)) {
-    if (!exportAll && !checkedBoxes.includes(gName)) continue; 
-    
-    for (const [cName, ch] of Object.entries(g.channels)) {
-      if (ch.obj.values.length > 0) {
-        columns.push({ header: `${gName}/${cName}`, values: ch.obj.values });
+function showPreview(event, name, values) {
+  const preview = $('channelPreview'), width = 260, height = 120;
+  const stats = numericStatistics(values);
+  preview.innerHTML = `<div class="pv-title">${esc(name)}</div>`;
+  if (stats.containsBigInt || !stats.count) {
+    preview.innerHTML += `<div class="pv-val">${stats.containsBigInt ? '64-bit integers: see exact values' : 'No finite numeric data'}</div>`;
+  } else {
+    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+    preview.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const points = Math.min(800, values.length), scale = Math.max(Math.abs(stats.min), Math.abs(stats.max)) || 1;
+      const low = stats.min / scale, range = stats.max / scale - low;
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+      ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 1.5; ctx.beginPath();
+      let drawing = false;
+      for (let i = 0; i < points; i++) {
+        const index = points === 1 ? 0 : Math.round(i * (values.length - 1) / (points - 1));
+        const value = values[index];
+        if (typeof value !== 'number' || !Number.isFinite(value)) { drawing = false; continue; }
+        const x = points === 1 ? width / 2 : 2 + i / (points - 1) * (width - 4);
+        const y = range ? height - 2 - ((value / scale - low) / range) * (height - 4) : height / 2;
+        if (drawing) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        drawing = true;
+        if (points === 1) ctx.fillRect(x - 2, y - 2, 4, 4);
       }
+      ctx.stroke();
     }
   }
-  if (columns.length === 0) { alert('No channel data to export.'); return; }
+  preview.style.display = 'block'; positionPreview(event);
+}
+function buildTree(groups) {
+  const container = $('treeContainer'); container.innerHTML = ''; $('channelPreview').style.display = 'none';
+  let keys = Object.keys(groups);
+  if (currentSort === 'name') keys.sort((a, b) => a === b ? 0 : a === '/' ? -1 : b === '/' ? 1 : groups[a].name.localeCompare(groups[b].name));
+  else keys = keys.includes('/') ? ['/', ...keys.filter(k => k !== '/')] : keys;
+  const count = keys.filter(key => key !== '/').length;
+  $('groupCount').textContent = `${count} group${count === 1 ? '' : 's'}`;
+  if (!selection) {
+    const firstKey = keys.find(key => groups[key].channelOrder.length);
+    if (firstKey !== undefined) {
+      const g = groups[firstKey], name = currentSort === 'name' ? [...g.channelOrder].sort((a,b) => a.localeCompare(b))[0] : g.channelOrder[0];
+      selection = { path: g.channels[name].path, gName: g.name, cName: name, obj: g.channels[name].obj };
+      expandedGroups.add(firstKey);
+    } else if (keys.length) {
+      const g = groups[keys[0]];
+      selection = { path: g.path, gName: g.name, cName: g.path === '/' ? 'File properties' : 'Group properties', obj: g.groupObj || { properties: {}, values: [] } };
+    }
+  }
+  for (const key of keys) {
+    const g = groups[key], node = document.createElement('div'), label = document.createElement('div'), list = document.createElement('div');
+    node.className = 'group-node'; label.className = 'group-label'; list.className = 'channels-list';
+    const names = [...g.channelOrder];
+    if (currentSort === 'name') names.sort((a, b) => a.localeCompare(b));
+    label.innerHTML = `<span class="arrow">▶</span><span class="g-icon">▤</span><span>${esc(g.name)}</span><span class="ch-count">${names.length} ch</span>`;
+    if (names.length) {
+      const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.className = 'group-export-cb'; checkbox.value = key;
+      checkbox.checked = checkedGroups.has(key); checkbox.title = 'Include this group in CSV export';
+      checkbox.addEventListener('click', event => event.stopPropagation());
+      checkbox.addEventListener('change', () => checkbox.checked ? checkedGroups.add(key) : checkedGroups.delete(key));
+      label.insertBefore(checkbox, label.children[1]);
+    }
+    label.classList.toggle('open', expandedGroups.has(key)); list.classList.toggle('open', expandedGroups.has(key));
+    label.addEventListener('click', () => {
+      if (expandedGroups.has(key)) expandedGroups.delete(key); else expandedGroups.add(key);
+      label.classList.toggle('open', expandedGroups.has(key)); list.classList.toggle('open', expandedGroups.has(key));
+      selectChannel(g.path, g.name, key === '/' ? 'File properties' : 'Group properties', g.groupObj || { properties: {}, values: [] });
+      activateTab('props');
+    });
+    for (const name of names) {
+      const ch = g.channels[name], item = document.createElement('div');
+      item.className = 'channel-item'; item.dataset.path = ch.path;
+      item.innerHTML = `<span class="c-dot"></span><span>${esc(name)}</span><span class="dtype">${esc(DTYPE_INFO[ch.obj.rawDataInfo?.dtype]?.name || '—')}</span>`;
+      item.addEventListener('click', () => selectChannel(ch.path, g.name, name, ch.obj));
+      item.addEventListener('mouseenter', event => showPreview(event, name, ch.obj.values));
+      item.addEventListener('mousemove', positionPreview);
+      item.addEventListener('mouseleave', () => { $('channelPreview').style.display = 'none'; });
+      list.appendChild(item);
+    }
+    node.appendChild(label); node.appendChild(list); container.appendChild(node);
+  }
+  if (selection) selectChannel(selection.path, selection.gName, selection.cName, selection.obj);
+}
+function selectChannel(path, gName, cName, obj) {
+  selection = { path, gName, cName, obj };
+  document.querySelectorAll('.channel-item').forEach(item => item.classList.toggle('active', item.dataset.path === path));
+  const values = obj.values || [], props = obj.properties || {}, keys = Object.keys(props), maxRows = 10000;
+  const dtype = DTYPE_INFO[obj.rawDataInfo?.dtype]?.name || '—';
+  if (!values.length) $('tab-values').innerHTML = '<div class="empty-state"><span class="big">∅</span>No raw data in this channel</div>';
+  else {
+    let html = '<div class="values-wrap"><table class="values-table"><thead><tr><th>#</th><th>Value</th></tr></thead><tbody>';
+    for (let i = 0; i < Math.min(values.length, maxRows); i++) {
+      const v = values[i], numeric = typeof v === 'number' || typeof v === 'bigint';
+      html += `<tr><td>${i}</td><td class="${numeric ? 'num' : 'str'}">${esc(v)}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+    if (values.length > maxRows) html += `<div class="truncate-note">Showing ${maxRows.toLocaleString()} of ${values.length.toLocaleString()} values. CSV exports all samples.</div>`;
+    $('tab-values').innerHTML = html;
+  }
+  $('tab-props').innerHTML = keys.length ? '<table class="props-table"><thead><tr><th>Property</th><th>Value</th><th>Type</th></tr></thead><tbody>' +
+    keys.map(key => `<tr><td class="key">${esc(key)}</td><td class="val">${esc(props[key].value)}</td><td class="tcell">${esc(props[key].type)}</td></tr>`).join('') + '</tbody></table>' :
+    '<div class="empty-state"><span class="big">∅</span>No properties</div>';
+  const stats = numericStatistics(values);
+  const card = (label, value) => `<div class="stat-card"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`;
+  let cards = card('Samples', values.length.toLocaleString()) + card('Data type', dtype) + card('Group', gName) + card('Properties', keys.length);
+  if (stats.containsBigInt) cards += card('Min (exact)', stats.integerMin) + card('Max (exact)', stats.integerMax);
+  else if (stats.count) cards += card('Min', stats.min.toPrecision(7)) + card('Max', stats.max.toPrecision(7)) + card('Mean', stats.mean.toPrecision(8)) + card('Std Dev', stats.std.toPrecision(6));
+  const note = stats.containsBigInt ? '64-bit integers are displayed and exported exactly. Mean, standard deviation and preview are omitted when values exceed the safe integer range.' :
+    stats.count && stats.excluded ? `${stats.excluded.toLocaleString()} non-finite values excluded from statistics.` : '';
+  $('tab-info').innerHTML = `<div class="stats-grid">${cards}</div>${note ? `<p class="truncate-note">${esc(note)}</p>` : ''}<table class="props-table"><thead><tr><th>Field</th><th>Detail</th></tr></thead><tbody>` +
+    [['path', path], ['channel', cName], ['group', gName]].map(([key,value]) => `<tr><td class="key">${key}</td><td class="val">${esc(value)}</td></tr>`).join('') + '</tbody></table>';
+}
 
-  // Auto-detect the best separator based on the OS, direct read in Excel... (well, there is a TDMS plugin for reading in Excel, so not really needed) 
-  const useSemicolon = (1.1).toLocaleString().includes(',');
-  const SEP = useSemicolon ? ';' : ',';
-
-  const numRows = Math.max(...columns.map(c => c.values.length));
-  const defaultName = (document.getElementById('statusText').textContent || 'export').replace(/\.tdms$/i,'') + '.csv';
-
-  let writable = null;
-  const blobParts = []; 
-
+function csvCell(value, separator = ',') {
+  if (value == null) return '';
+  // Match the decimal mark to the locale-derived separator, without grouping digits.
+  const text = typeof value === 'number' && separator === ';' ? String(value).replace('.', ',') : String(value);
+  return text.includes(separator) || /["\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+}
+async function exportCSV() {
+  if (exportBusy) return;
+  const columns = [];
+  for (const [key, group] of Object.entries(parsedGroups)) {
+    if (checkedGroups.size && !checkedGroups.has(key)) continue;
+    for (const name of group.channelOrder) {
+      const ch = group.channels[name];
+      if (ch.obj.values.length) columns.push({ header: `${group.name}/${name}`, values: ch.obj.values });
+    }
+  }
+  if (!columns.length) { alert('No channel data to export.'); return; }
+  const separator = (1.1).toLocaleString().includes(',') ? ';' : ',';
+  const numRows = columns.reduce((max, c) => Math.max(max, c.values.length), 0);
+  const filename = (loadedFilename || 'export').replace(/\.tdms$/i, '') + '.csv';
+  let writable = null; exportBusy = true; $('csvBtn').disabled = true;
   try {
     if (window.showSaveFilePicker) {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: defaultName,
-        types: [{ description: 'CSV file', accept: { 'text/csv': ['.csv'] } }],
-      });
-      writable = await handle.createWritable();
+      try {
+        const handle = await window.showSaveFilePicker({ suggestedName: filename, types: [{ description: 'CSV file', accept: { 'text/csv': ['.csv'] } }] });
+        writable = await handle.createWritable();
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        // Fall back only when the API is unavailable in this context.
+        if (error.name !== 'SecurityError' && error.name !== 'NotSupportedError') throw error;
+      }
     }
-  } catch (e) {
-    if (e.name === 'AbortError') return; 
-  }
-
-  const writeData = async (data) => {
-    if (writable) await writable.write(data);
-    else blobParts.push(data);
-  };
-
-  // Write header 
-  await writeData(columns.map(c => csvCell(c.header, SEP)).join(SEP) + '\r\n');
-
-  const CHUNK_SIZE = 10000;
-  for (let i = 0; i < numRows; i += CHUNK_SIZE) {
-    const chunk = [];
-    const end = Math.min(i + CHUNK_SIZE, numRows);
-    
-    for (let j = i; j < end; j++) {
-      // Write rows using dynamic separator
-      chunk.push(columns.map(c => j < c.values.length ? csvCell(c.values[j], SEP) : '').join(SEP));
+    const parts = [];
+    const write = async data => { if (writable) await writable.write(data); else parts.push(data); };
+    await write('\ufeff' + columns.map(c => csvCell(c.header, separator)).join(separator) + '\r\n');
+    for (let start = 0; start < numRows; start += 10000) {
+      const rows = [];
+      for (let row = start; row < Math.min(start + 10000, numRows); row++) rows.push(columns.map(c => row < c.values.length ? csvCell(c.values[row], separator) : '').join(separator));
+      await write(rows.join('\r\n') + '\r\n');
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
-    
-    await writeData(chunk.join('\r\n') + '\r\n');
-  }
-
-  if (writable) {
-    await writable.close();
-  } else {
-    const blob = new Blob(blobParts, { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = defaultName; a.click();
-    URL.revokeObjectURL(url);
-  }
+    if (writable) { await writable.close(); writable = null; }
+    else {
+      const url = URL.createObjectURL(new Blob(parts, { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a'); link.href = url; link.download = filename;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+  } catch (error) {
+    if (writable) { try { await writable.abort(); } catch (_) {} }
+    alert('CSV export failed: ' + error.message);
+  } finally { exportBusy = false; $('csvBtn').disabled = false; }
 }
 
-function csvCell(v, sep) {
-  if (v == null) return ''; 
-  const s = String(v);
-  // Look for the dynamic separator to wrap in quotes if needed
-  if (s.includes(sep) || s.includes('"') || s.includes('\n')) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
+function clearView() {
+  parsedGroups = Object.create(null); selection = null; loadedFilename = '';
+  checkedGroups.clear(); expandedGroups.clear();
+  $('dropzone').style.display = ''; $('content').style.display = 'none';
+  $('newFileBtn').style.display = 'none'; $('csvBtn').style.display = 'none';
+  $('treeContainer').innerHTML = ''; $('channelPreview').style.display = 'none';
+  for (const name of ['values', 'props', 'info']) $('tab-' + name).innerHTML = '<div class="empty-state"><span class="big">⟵</span>Select a channel</div>';
 }
-
-
 function resetUI() {
-  document.getElementById('dropzone').style.display='';
-  document.getElementById('content').style.display='none';
-  document.getElementById('statusBar').style.display='none';
-  document.getElementById('newFileBtn').style.display='none';
-  document.getElementById('csvBtn').style.display='none';
-  document.getElementById('treeContainer').innerHTML='';
-  document.getElementById('fileInput').value='';
+  loadGeneration++; if (parsingWorker) parsingWorker.terminate(); parsingWorker = null;
+  clearView(); $('statusBar').style.display = 'none'; $('fileInput').value = '';
 }
-
-
-function handleFile(file) {
+async function handleFile(file) {
   if (!file) return;
-  showStatus(`Reading ${file.name}…`, '', 'loading');
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const objects = parseTDMS(e.target.result);
-
-      parsedGroups = parsePaths(objects);
-      const gCount = Object.keys(parsedGroups).length;
-      const cCount = Object.values(parsedGroups).reduce((s,g)=>s+Object.keys(g.channels).length,0);
-      const samples= Object.values(objects).reduce((s,o)=>s+(o.values?.length||0),0);
-
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-      const fileDate = new Date(file.lastModified).toLocaleString();
-
-      showStatus(file.name, `${sizeMB} MB · ${fileDate}`, 'ok', [
-        {label:'Groups',   val:gCount},
-        {label:'Channels', val:cCount},
-        {label:'Samples',  val:samples.toLocaleString()}
-      ]);
-
-      buildTree(parsedGroups);
-      document.getElementById('dropzone').style.display='none';
-      document.getElementById('content').style.display='flex';
-      document.getElementById('newFileBtn').style.display='block';
-      document.getElementById('csvBtn').style.display='block';
-
-    } catch(err) {
-      showStatus('Parse error: '+err.message, '', 'error');
-      console.error(err);
+  const generation = ++loadGeneration;
+  if (parsingWorker) parsingWorker.terminate(); parsingWorker = null;
+  clearView(); showStatus(`Reading ${file.name}…`, '', 'loading');
+  try {
+    const buffer = await file.arrayBuffer();
+    if (generation !== loadGeneration) return;
+    showStatus(`Parsing ${file.name}…`, '', 'loading');
+    // Parse in a worker so large files do not block the browser interface.
+    const workerSource = `'use strict'; const DTYPE_INFO = ${JSON.stringify(DTYPE_INFO)};\n${splitTDMSPath.toString()}\n${parseTDMS.toString()}\nonmessage = event => { try { postMessage({ objects: parseTDMS(event.data) }); } catch (error) { postMessage({ error: error.message }); } };`;
+    let worker = null;
+    if (typeof Worker !== 'undefined') {
+      const url = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
+      try { worker = new Worker(url); } catch (_) { /* Restricted contexts may prohibit blob workers. */ }
+      finally { URL.revokeObjectURL(url); }
     }
-  };
-  reader.readAsArrayBuffer(file);
+    let objects;
+    if (worker) {
+      parsingWorker = worker;
+      objects = await new Promise((resolve, reject) => {
+        worker.onmessage = event => { worker.terminate(); if (parsingWorker === worker) parsingWorker = null;
+          if (event.data.error) reject(new Error(event.data.error)); else resolve(event.data.objects); };
+        worker.onerror = event => { worker.terminate(); if (parsingWorker === worker) parsingWorker = null; reject(new Error(event.message || 'Parser worker failed')); };
+        worker.postMessage(buffer, [buffer]);
+      });
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (generation !== loadGeneration) return;
+      objects = parseTDMS(buffer);
+    }
+    if (generation !== loadGeneration) return;
+    parsedGroups = parsePaths(objects); loadedFilename = file.name;
+    const groups = Object.entries(parsedGroups).filter(([key]) => key !== '/').length;
+    const channels = Object.values(parsedGroups).reduce((n, group) => n + group.channelOrder.length, 0);
+    const samples = Object.values(objects).reduce((n, obj) => n + obj.values.length, 0);
+    activateTab('values'); buildTree(parsedGroups);
+    showStatus(file.name, `${(file.size / 1048576).toFixed(2)} MB · ${new Date(file.lastModified).toLocaleString()}`, 'ok', [
+      { label: 'Groups', val: groups }, { label: 'Channels', val: channels }, { label: 'Samples', val: samples.toLocaleString() }
+    ]);
+    $('dropzone').style.display = 'none'; $('content').style.display = 'flex';
+    $('newFileBtn').style.display = 'block'; $('csvBtn').style.display = 'block'; $('csvBtn').disabled = exportBusy;
+  } catch (error) {
+    if (generation !== loadGeneration) return;
+    clearView(); showStatus('Cannot read file: ' + error.message, '', 'error');
+  }
 }
 
-
-const dz = document.getElementById('dropzone');
-dz.addEventListener('click',  ()=>document.getElementById('fileInput').click());
-dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('drag-over');});
-dz.addEventListener('dragleave', ()=>dz.classList.remove('drag-over'));
-dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('drag-over');handleFile(e.dataTransfer.files[0]);});
-document.getElementById('fileInput').addEventListener('change', e=>handleFile(e.target.files[0]));
-
-document.querySelectorAll('.tab').forEach(tab=>{
-  tab.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
-  });
-});
-
-// version 1.0.2 : rajout d'un petit graphe preview
-//1.0.4 : les propriétés des groupes sont indiquées
-
+const dz = $('dropzone');
+dz.addEventListener('click', event => { if (event.target !== $('fileInput')) $('fileInput').click(); });
+$('fileInput').addEventListener('click', event => event.stopPropagation());
+$('fileInput').addEventListener('change', event => { const file = event.target.files[0]; event.target.value = ''; handleFile(file); });
+dz.addEventListener('dragover', event => { event.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', event => { event.preventDefault(); dz.classList.remove('drag-over'); handleFile(event.dataTransfer.files[0]); });
+document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => activateTab(tab.dataset.tab)));
 function toggleTheme() {
-  const isDark = document.documentElement.classList.toggle('dark');
-  document.getElementById('themeToggle').textContent = isDark ? '☀️' : '🌙';
+  const dark = document.documentElement.classList.toggle('dark');
+  $('themeToggle').textContent = dark ? '☀️' : '🌙';
 }
+
 </script>
 
 <footer>
-  NitaD, Univ Paris-Saclay, Version 1.2.1 &middot; 13 June 2026
+  NitaD, Univ Paris-Saclay, Version 1.3.0 &middot; corrected reader
 </footer>
 
 <div id="channelPreview"></div>
